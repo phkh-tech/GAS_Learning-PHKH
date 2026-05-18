@@ -46,6 +46,26 @@ void ACharacterBase::BeginPlay()
 	
 }
 
+void ACharacterBase::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+	
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->InitAbilityActorInfo(this, this);
+	}
+}
+
+void ACharacterBase::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+	
+	if (AbilitySystemComponent)
+	{
+		AbilitySystemComponent->InitAbilityActorInfo(this, this);
+	}
+}
+
 // Called every frame
 void ACharacterBase::Tick(float DeltaTime)
 {
@@ -54,10 +74,9 @@ void ACharacterBase::Tick(float DeltaTime)
 }
 
 // Called to bind functionality to input
-void ACharacterBase::SetupPlayerInputComponen t(UInputComponent* PlayerInputComponent)
+void ACharacterBase::SetupPlayerInputComponent (UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
-
 }
 
 class UAbilitySystemComponent* ACharacterBase::GetAbilitySystemComponent() const
