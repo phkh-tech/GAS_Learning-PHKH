@@ -37,6 +37,9 @@ ACharacterBase::ACharacterBase()
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.f;
 
+	AbilitySystemComponent->RegisterGameplayTagEvent(FGameplayTag::RequestGameplayTag("State.Dead"))
+	.AddUObject(this, &ACharacterBase::OnDeadTagChanged);
+	
 }
 
 // Called when the game starts or when spawned
@@ -65,6 +68,27 @@ void ACharacterBase::OnRep_PlayerState()
 		AbilitySystemComponent->InitAbilityActorInfo(this, this);
 	}
 }
+
+void ACharacterBase::OnDeadTagChanged(const FGameplayTag CallbackTag, int32 NewCount) const
+{
+	if (NewCount > 0)
+	{
+		HandleDeath();
+	}
+}
+
+void ACharacterBase::HandleDeath_Implementation() const
+{
+	GetMesh()->SetSimulatePhysics(true);
+	GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	GetCharacterMovement()->DisableMovement();
+	
+	FVector Impulse = GetActorForwardVector() * -20000;
+	Impulse.Z = 15000;
+	GetMesh()->AddImpulseAtLocation(Impulse, GetActorLocation());
+}
+
 
 // Called every frame
 void ACharacterBase::Tick(float DeltaTime)
