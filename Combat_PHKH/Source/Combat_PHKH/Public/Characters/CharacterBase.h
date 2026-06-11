@@ -33,11 +33,6 @@ protected:
 	
 	virtual void PossessedBy(AController* NewController) override;
 	virtual void OnRep_PlayerState() override;
-	
-	virtual void OnDeadTagChanged(const FGameplayTag CallbackTag, int32 NewCount) const;
-	
-	UFUNCTION(BlueprintNativeEvent, BlueprintCallable, Category = "Damage")
-	void HandleDeath() const;
 
 public:		
 	// Called every frame
