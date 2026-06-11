@@ -11,6 +11,7 @@ UBaseAttributeSet::UBaseAttributeSet()
  	MaxHealth = 100.f;
 	Stamina = 100.f;
 	MaxStamina = 100.f;
+	Damage = 0.f;
 }
 
 void UBaseAttributeSet::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
