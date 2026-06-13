@@ -4,12 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
-#include "PlayerControllerBase.generated.h"
 #include "InputActionValue.h"
+#include "PlayerControllerBase.generated.h"
 
 class UInputAction;
 class UCombatUserWidget;
-
+	
 /**
  * 
  */
@@ -23,8 +23,8 @@ protected:
 	virtual void SetupInputComponent() override;
 	
 	// Assign Input Actions in Blueprint
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Input")
-	TObjectPtr<UInputAction>* OpenMenuAction;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	TObjectPtr<UInputAction> BatUI;
 	
 	// Instantiate Widget class
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")

@@ -13,11 +13,11 @@ void UCombatUserWidget::NativeConstruct()
 	
 	if (CloseUIButton)
 	{
-		CloseUIButton->OnClicked.AddDynamic(this, &UCombatUserWidget::RemoveWidget);
+		CloseUIButton->OnClicked.AddDynamic(this, &UCombatUserWidget::TurnOfWidget);
 	}
 }
 
-void UCombatUserWidget::RemoveWidget()
+void UCombatUserWidget::TurnOfWidget()
 {
-	RemoveFromParent();
+	SetVisibility(ESlateVisibility::Hidden);
 }

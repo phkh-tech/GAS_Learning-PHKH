@@ -23,6 +23,6 @@ public:
 	
 private:
 	UFUNCTION()
-	void RemoveWidget();
+	void TurnOfWidget();
 	
 };
