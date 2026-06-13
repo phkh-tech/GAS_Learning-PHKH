@@ -3,9 +3,21 @@
 
 #include "UI/CombatUserWidget.h"
 
+#include "Components/Button.h"
+
 void UCombatUserWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 	
 	UE_LOG(LogTemp, Warning, TEXT("CombatUserWidget dang duoc dung"));
+	
+	if (CloseUIButton)
+	{
+		CloseUIButton->OnClicked.AddDynamic(this, &UCombatUserWidget::RemoveWidget);
+	}
+}
+
+void UCombatUserWidget::RemoveWidget()
+{
+	RemoveFromParent();
 }

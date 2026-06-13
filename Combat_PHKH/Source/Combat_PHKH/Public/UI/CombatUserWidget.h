@@ -6,6 +6,7 @@
 #include "Blueprint/UserWidget.h"
 #include "CombatUserWidget.generated.h"
 
+class UButton;
 /**
  * 
  */
@@ -16,5 +17,12 @@ class COMBAT_PHKH_API UCombatUserWidget : public UUserWidget
 	
 public:
 	virtual void NativeConstruct() override;
+	
+	UPROPERTY(META=(BindWidget))
+	TObjectPtr<UButton> CloseUIButton;
+	
+private:
+	UFUNCTION()
+	void RemoveWidget();
 	
 };
