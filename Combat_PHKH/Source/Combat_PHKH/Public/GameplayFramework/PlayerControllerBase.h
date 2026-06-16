@@ -24,7 +24,7 @@ protected:
 	
 	// Assign Input Actions in Blueprint
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	TObjectPtr<UInputAction> BatUI;
+	TObjectPtr<UInputAction> ShowWidgetInputAction;
 	
 	// Instantiate Widget class
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="UI")
@@ -39,4 +39,6 @@ private:
 	// Function bound to input action
 	UFUNCTION()
 	void OpenCombatMenu(const FInputActionValue& Value);
+	
+	void CreateCombatWidget();
 };

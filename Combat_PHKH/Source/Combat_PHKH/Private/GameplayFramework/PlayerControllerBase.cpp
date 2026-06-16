@@ -11,7 +11,10 @@
 void APlayerControllerBase::BeginPlay()
 {
 	Super::BeginPlay();
-	
+}
+
+void APlayerControllerBase::CreateCombatWidget()
+{
 	if (IsLocalController() && CombatWidgetClass)
 	{
 		CacheWidget = CreateWidget<UCombatUserWidget>(this, CombatWidgetClass);
@@ -29,15 +32,20 @@ void APlayerControllerBase::SetupInputComponent()
 	
 	if (UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent))
 	{
-		if (BatUI)
+		if (ShowWidgetInputAction)
 		{
-			EnhancedInput->BindAction(BatUI, ETriggerEvent::Triggered, this, &APlayerControllerBase::OpenCombatMenu);
+			EnhancedInput->BindAction(ShowWidgetInputAction, ETriggerEvent::Triggered, this, &APlayerControllerBase::OpenCombatMenu);
 		}
 	}
 }
 
 void APlayerControllerBase::OpenCombatMenu(const FInputActionValue& Value)
 {
+	if (!CacheWidget)
+	{
+		CreateCombatWidget();
+	}
+	
 	if (!CacheWidget) return;
 	
 	if (CacheWidget->IsVisible())
@@ -53,5 +61,6 @@ void APlayerControllerBase::OpenCombatMenu(const FInputActionValue& Value)
 		bShowMouseCursor = true;
 	}
 }
+
 
 

@@ -9,15 +9,13 @@ void UCombatUserWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
 	
-	UE_LOG(LogTemp, Warning, TEXT("CombatUserWidget dang duoc dung"));
-	
 	if (CloseUIButton)
 	{
-		CloseUIButton->OnClicked.AddDynamic(this, &UCombatUserWidget::TurnOfWidget);
+		CloseUIButton->OnClicked.AddDynamic(this, &UCombatUserWidget::TurnOffWidget);
 	}
 }
 
-void UCombatUserWidget::TurnOfWidget()
+void UCombatUserWidget::TurnOffWidget()
 {
 	SetVisibility(ESlateVisibility::Hidden);
 }
