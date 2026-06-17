@@ -35,6 +35,7 @@ void APlayerControllerBase::SetupInputComponent()
 		if (ShowWidgetInputAction)
 		{
 			EnhancedInput->BindAction(ShowWidgetInputAction, ETriggerEvent::Triggered, this, &APlayerControllerBase::OpenCombatMenu);
+			
 		}
 	}
 }
@@ -51,16 +52,24 @@ void APlayerControllerBase::OpenCombatMenu(const FInputActionValue& Value)
 	if (CacheWidget->IsVisible())
 	{
 		CacheWidget->SetVisibility(ESlateVisibility::Hidden);
-		SetInputMode(FInputModeGameAndUI());
+		
+		FInputModeGameOnly GameMode;
+		SetInputMode(GameMode);
 		bShowMouseCursor = false;
 	}
 	else
 	{
 		CacheWidget->SetVisibility(ESlateVisibility::Visible);
-		SetInputMode(FInputModeGameAndUI());
+		
+		//Pause the game when the widget is open
+		SetPause(true);
+		
+		// Explicitly tell tell the input system to focus on the widget when it's opened
+		FInputModeUIOnly UIMode;
+		UIMode.SetWidgetToFocus(CacheWidget->GetCachedWidget());
+		UIMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		
+		SetInputMode(UIMode);
 		bShowMouseCursor = true;
 	}
 }
-
-
-

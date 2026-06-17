@@ -18,6 +18,9 @@ class COMBAT_PHKH_API UCombatUserWidget : public UUserWidget
 public:
 	virtual void NativeConstruct() override;
 	
+	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+	
 	UPROPERTY(META=(BindWidget))
 	TObjectPtr<UButton> CloseUIButton;
 	
