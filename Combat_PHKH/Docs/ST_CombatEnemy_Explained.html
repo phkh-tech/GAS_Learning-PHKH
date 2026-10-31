@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ST_CombatEnemy: How the Enemy StateTree Works / StateTree của kẻ địch hoạt động thế nào</title>
+<style>
+  :root {
+    --bg: #14161b; --panel: #1c1f26; --panel2: #232733; --text: #d9dde6; --muted: #9aa3b5;
+    --accent: #6cb6ff; --accent2: #f0a35e; --good: #6fd08c; --warn: #ffcc66; --bad: #ff7b7b;
+    --code: #0f1115; --border: #2e3340; --purple: #c39bff; --vi: #b9d7a8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", Roboto, "Noto Sans", sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; }
+  nav { position: fixed; top: 0; left: 0; bottom: 0; width: 290px; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--border); padding: 20px 14px; font-size: 14px; }
+  nav h2 { font-size: 15px; color: var(--accent); margin: 0 0 12px; }
+  nav a { display: block; color: var(--muted); text-decoration: none; padding: 4px 8px; border-radius: 4px; }
+  nav a:hover { background: var(--panel2); color: var(--text); }
+  nav .sub { padding-left: 22px; font-size: 13px; }
+  main { margin-left: 290px; padding: 30px 56px 80px; max-width: 1150px; }
+  h1 { font-size: 32px; margin: 0 0 6px; }
+  h2 { margin-top: 56px; padding-bottom: 6px; border-bottom: 2px solid var(--border); color: var(--accent); }
+  h3 { margin-top: 32px; color: var(--accent2); }
+  h4 { margin-bottom: 4px; }
+  .subtitle { color: var(--muted); margin-top: 0; }
+  code { font-family: Consolas, "Cascadia Code", monospace; background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 0.92em; color: #e6c07b; }
+  pre { background: var(--code); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-size: 13.5px; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #cfd6e4; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: var(--accent); }
+  tr:nth-child(even) td { background: #181b21; }
+  .box { border-radius: 8px; padding: 12px 16px; margin: 16px 0; border-left: 4px solid; background: var(--panel); }
+  .box.tip { border-color: var(--good); }
+  .box.warn { border-color: var(--warn); }
+  .box.bad { border-color: var(--bad); }
+  .box.art { border-color: var(--accent2); }
+  .box b.label { display: block; margin-bottom: 4px; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 16px 0; }
+  .flow .step { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 13.5px; max-width: 260px; }
+  .flow .step small { display: block; color: var(--muted); }
+  .flow .arrow { color: var(--accent); font-weight: bold; }
+  .map { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0; }
+  .map .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .map .card h4 { margin: 0 0 6px; color: var(--accent2); }
+  .map .card p { margin: 0; font-size: 14px; color: var(--muted); }
+  footer { margin-top: 60px; color: var(--muted); font-size: 13px; }
+
+  /* ---------- State tree diagram / Sơ đồ cây ---------- */
+  ul.tree, ul.tree ul { list-style: none; margin: 0; padding-left: 26px; }
+  ul.tree { padding-left: 0; margin: 18px 0; font-size: 14px; }
+  ul.tree li { position: relative; padding: 3px 0 3px 18px; }
+  ul.tree li::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 1px solid var(--border); }
+  ul.tree li::after { content: ""; position: absolute; left: 0; top: 17px; width: 14px; border-top: 1px solid var(--border); }
+  ul.tree li:last-child::before { bottom: auto; height: 17px; }
+  ul.tree > li { padding-left: 0; }
+  ul.tree > li::before, ul.tree > li::after { display: none; }
+  .st { display: inline-block; background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 9px; font-weight: 600; }
+  .st.root { border-color: var(--accent); }
+  .st.dead { border-color: var(--bad); }
+  .st.leaf { font-weight: 500; }
+  .sel { font-size: 11.5px; color: var(--purple); margin-left: 6px; }
+  .cond { font-size: 12.5px; color: var(--warn); margin-left: 6px; }
+  .tsk { font-size: 12.5px; color: var(--good); margin-left: 6px; }
+  .trn { display: block; font-size: 12.5px; color: var(--muted); margin-left: 10px; }
+  .trn b { color: var(--accent); font-weight: 600; }
+  .legend span { margin-right: 18px; font-size: 13px; }
+  .num { color: var(--muted); font-size: 12px; margin-right: 4px; }
+
+  /* ---------- Language switch / Chuyển ngôn ngữ ---------- */
+  #lang { position: fixed; top: 12px; right: 16px; z-index: 10; display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
+  #lang button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 5px; cursor: pointer; }
+  #lang button.on { background: var(--accent); color: #0d1117; font-weight: 600; }
+  body.mode-en .vi { display: none !important; }
+  body.mode-vi .en { display: none !important; }
+  body.mode-both span.vi { display: block; }
+  body.mode-both .vi { color: var(--vi); }
+  /* inline pairs (short labels inside the tree diagram): keep on one line, "EN / VI" */
+  body.mode-both span.vi.i { display: inline; }
+  body.mode-both span.vi.i::before { content: " / "; color: var(--muted); }
+  body.mode-both h1 .vi, body.mode-both h2 .vi, body.mode-both h3 .vi, body.mode-both h4 .vi { font-size: 0.72em; font-weight: 500; margin-top: 2px; }
+  body.mode-both nav .vi { font-size: 12px; }
+  body.mode-both .flow .step small.vi, body.mode-both .map .card p.vi { color: var(--vi); opacity: .9; }
+  body.mode-both p.vi, body.mode-both ul.vi, body.mode-both ol.vi { margin-top: -6px; }
+  body.mode-both td span.vi, body.mode-both td ul.vi { margin-top: 4px; }
+  body.mode-vi .vi, body.mode-en .en { color: inherit; }
+  @media (max-width: 900px) { nav { display: none; } main { margin-left: 0; padding: 20px; } .map { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body class="mode-both">
+
+<div id="lang">
+  <button data-mode="both">EN + VI</button>
+  <button data-mode="en">English</button>
+  <button data-mode="vi">Tiếng Việt</button>
+</div>
+
+<nav>
+  <h2><span class="en">Contents</span><span class="vi">Mục lục</span></h2>
+  <a href="#glance"><span class="en">0. At a glance</span><span class="vi">0. Tổng quan nhanh</span></a>
+  <a href="#crash"><span class="en">1. StateTree in 5 minutes</span><span class="vi">1. StateTree trong 5 phút</span></a>
+  <a href="#startup"><span class="en">2. How the tree gets started</span><span class="vi">2. Cây được khởi động thế nào</span></a>
+  <a href="#data"><span class="en">3. The data the tree works with</span><span class="vi">3. Dữ liệu mà cây sử dụng</span></a>
+  <a class="sub" href="#context">Context</a>
+  <a class="sub" href="#params">Parameters</a>
+  <a class="sub" href="#global"><span class="en">Global task: Get Player Info</span><span class="vi">Global task: Get Player Info</span></a>
+  <a href="#diagram"><span class="en">4. The full tree (diagram)</span><span class="vi">4. Toàn bộ cây (sơ đồ)</span></a>
+  <a href="#walk"><span class="en">5. State-by-state walkthrough</span><span class="vi">5. Đi qua từng state</span></a>
+  <a class="sub" href="#s-root">Root</a>
+  <a class="sub" href="#s-dead">Dead</a>
+  <a class="sub" href="#s-select">Select Behaviors at Random</a>
+  <a class="sub" href="#s-attacking">Attacking</a>
+  <a class="sub" href="#s-idling">Idling</a>
+  <a class="sub" href="#s-flanking">Flanking</a>
+  <a class="sub" href="#s-evading">Evading</a>
+  <a class="sub" href="#s-launched">Launched</a>
+  <a class="sub" href="#s-default">Default</a>
+  <a href="#scenario"><span class="en">6. A play-through, tick by tick</span><span class="vi">6. Một trận đấu, từng tick một</span></a>
+  <a href="#tasks"><span class="en">7. Custom tasks &amp; conditions</span><span class="vi">7. Task &amp; condition tự viết</span></a>
+  <a href="#bindings"><span class="en">8. All property bindings</span><span class="vi">8. Toàn bộ property binding</span></a>
+  <a href="#files"><span class="en">9. Connected files map</span><span class="vi">9. Bản đồ các file liên quan</span></a>
+  <a href="#issues"><span class="en">10. Things worth knowing / fixing</span><span class="vi">10. Điều cần biết / cần sửa</span></a>
+  <a href="#debug"><span class="en">11. How to watch it run</span><span class="vi">11. Cách quan sát cây chạy</span></a>
+</nav>
+
+<main>
+<h1><span class="en">ST_CombatEnemy: How the Enemy StateTree Works</span><span class="vi">ST_CombatEnemy: StateTree của kẻ địch hoạt động thế nào</span></h1>
+<p class="subtitle en">A complete walkthrough of <code>/Game/Variant_Combat/Blueprints/AI/ST_CombatEnemy</code>: every state, task, condition, transition and binding, and how it connects to the controller, the enemy pawn, the EQS queries and the Blueprint tasks. Unreal Engine 5.7.</p>
+<p class="subtitle vi">Hướng dẫn đầy đủ về <code>/Game/Variant_Combat/Blueprints/AI/ST_CombatEnemy</code>: mọi state, task, condition, transition và binding, cùng cách nó kết nối với controller, pawn kẻ địch, các EQS query và các Blueprint task. Unreal Engine 5.7.</p>
+
+<div class="box tip"><span class="en">Use the buttons in the top-right corner to switch between <b>English</b>, <b>Tiếng Việt</b> or both. Technical names (State, Task, Transition, node names&hellip;) are kept in English in the Vietnamese text, because that's what you see in the editor.</span><span class="vi">Dùng các nút ở góc trên bên phải để chuyển giữa <b>English</b>, <b>Tiếng Việt</b> hoặc cả hai. Các thuật ngữ kỹ thuật (State, Task, Transition, tên node&hellip;) được giữ nguyên tiếng Anh trong phần tiếng Việt, vì đó là những gì bạn thấy trong editor.</span></div>
+
+<div class="box tip"><b class="label"><span class="en">Where this information comes from</span><span class="vi">Thông tin này lấy từ đâu</span></b>
+<span class="en">Everything here was read from the actual asset, not guessed from the template. The state data came from the editor's Python API. Child order, property bindings and parameter defaults were decoded from the saved <code>.uasset</code>. The Blueprint task graphs were read through the editor. Where something could not be verified, it is marked <i>(unverified)</i>.</span>
+<span class="vi">Mọi thứ ở đây đều được đọc từ asset thật, không phải đoán từ template. Dữ liệu state lấy từ Python API của editor. Thứ tự các state con, property binding và giá trị mặc định của parameter được giải mã từ file <code>.uasset</code> đã lưu. Graph của các Blueprint task được đọc qua editor. Chỗ nào không kiểm chứng được sẽ được đánh dấu <i>(chưa kiểm chứng)</i>.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="glance"><span class="en">0. At a glance</span><span class="vi">0. Tổng quan nhanh</span></h2>
+<table>
+<tr><th style="width:230px"><span class="en">Property</span><span class="vi">Thuộc tính</span></th><th><span class="en">Value</span><span class="vi">Giá trị</span></th></tr>
+<tr><td>Asset</td><td><code>Content/Variant_Combat/Blueprints/AI/ST_CombatEnemy.uasset</code></td></tr>
+<tr><td>Schema</td><td><code>StateTreeAIComponentSchema</code> <span class="en">(the schema for StateTrees run by a <i>StateTree AI Component</i> on an AI controller)</span><span class="vi">(schema dành cho StateTree được chạy bởi một <i>StateTree AI Component</i> trên AI controller)</span></td></tr>
+<tr><td>Context Actor Class</td><td><code>BP_EnemyNPC</code> (<code>/Game/Characters/NPC/BP_EnemyNPC</code>)</td></tr>
+<tr><td>AI Controller Class</td><td><code>BP_CombatAIController</code></td></tr>
+<tr><td><span class="en">Who runs it</span><span class="vi">Ai chạy nó</span></td><td><span class="en">The <code>StateTreeAI</code> component on <code>BP_CombatAIController</code>. It is the only asset that references the tree.</span><span class="vi">Component <code>StateTreeAI</code> trên <code>BP_CombatAIController</code>. Đây là asset duy nhất tham chiếu tới cây.</span></td></tr>
+<tr><td><span class="en">Root description</span><span class="vi">Mô tả của Root</span></td><td><span class="en"><i>"Simple enemy StateTree. Alternates between waiting, circling the player and closing in for melee attacks."</i></span><span class="vi"><i>"Simple enemy StateTree. Alternates between waiting, circling the player and closing in for melee attacks."</i> (StateTree kẻ địch đơn giản. Luân phiên giữa đứng chờ, đi vòng quanh người chơi và áp sát để đánh cận chiến.)</span></td></tr>
+<tr><td><span class="en">Size</span><span class="vi">Quy mô</span></td><td><span class="en">25 states, 1 global task, 14 asset dependencies (9 Blueprint tasks/conditions, 3 EQS queries, the controller and the pawn class)</span><span class="vi">25 state, 1 global task, 14 asset phụ thuộc (9 Blueprint task/condition, 3 EQS query, controller và class pawn)</span></td></tr>
+<tr><td><span class="en">Last changed in git</span><span class="vi">Lần sửa gần nhất trong git</span></td><td><code>3cf8faa</code> "Adjust the State tree for new Enemy NPC class" (2026-06-08), <code>da58f3c</code>, <code>8fe8302</code></td></tr>
+</table>
+
+<div class="box warn"><b class="label"><span class="en">Correction to the earlier answer</span><span class="vi">Đính chính câu trả lời trước</span></b>
+<span class="en">Earlier I said <code>BP_CombatEnemy</code> uses this tree. That is only half true now. <code>BP_CombatEnemy</code> still has <code>BP_CombatAIController</code> as its AI Controller Class, so the tree would be <i>started</i> for it. But in commit <code>3cf8faa</code> the tree's <b>Context Actor Class</b> was changed to <b><code>BP_EnemyNPC</code></b>, and the attack, landing and danger tasks now cast their <code>Character</code> context to <code>BP_EnemyNPC</code>. In practice the tree is built for <b>BP_EnemyNPC</b>, which is also what <code>BP_Combat_EnemySpawner</code> spawns (its <code>Enemy Class</code> is <code>BP_EnemyNPC</code>). See <a href="#issues">section 10</a>.</span>
+<span class="vi">Trước đó tôi nói <code>BP_CombatEnemy</code> dùng cây này. Giờ điều đó chỉ đúng một nửa. <code>BP_CombatEnemy</code> vẫn đặt <code>BP_CombatAIController</code> làm AI Controller Class, nên cây vẫn sẽ được <i>khởi động</i> cho nó. Nhưng ở commit <code>3cf8faa</code>, <b>Context Actor Class</b> của cây đã được đổi thành <b><code>BP_EnemyNPC</code></b>, và các task tấn công, tiếp đất và nguy hiểm giờ đều cast context <code>Character</code> sang <code>BP_EnemyNPC</code>. Trên thực tế, cây được làm cho <b>BP_EnemyNPC</b>, cũng chính là thứ mà <code>BP_Combat_EnemySpawner</code> spawn ra (<code>Enemy Class</code> của nó là <code>BP_EnemyNPC</code>). Xem <a href="#issues">mục 10</a>.</span></div>
+
+<div class="map">
+  <div class="card"><h4><span class="en">Brain</span><span class="vi">Bộ não</span></h4><p class="en"><code>ST_CombatEnemy</code> decides <i>what</i> to do each frame: idle, flank, attack, evade, wait for landing, die.</p><p class="vi"><code>ST_CombatEnemy</code> quyết định <i>làm gì</i> mỗi frame: đứng chờ, đi vòng, tấn công, né, chờ tiếp đất, chết.</p></div>
+  <div class="card"><h4><span class="en">Hands</span><span class="vi">Đôi tay</span></h4><p class="en">Blueprint tasks (<code>StateTreeTasks/</code>) and engine tasks (Move To, Run Env Query, Delay) do the actual work.</p><p class="vi">Các Blueprint task (<code>StateTreeTasks/</code>) và task có sẵn của engine (Move To, Run Env Query, Delay) làm phần việc thực tế.</p></div>
+  <div class="card"><h4><span class="en">Body</span><span class="vi">Cơ thể</span></h4><p class="en"><code>BP_EnemyNPC</code> owns the montages, HP, the <code>On Attack Completed</code> dispatcher and the danger memory that the tasks read and call.</p><p class="vi"><code>BP_EnemyNPC</code> sở hữu các montage, HP, dispatcher <code>On Attack Completed</code> và "trí nhớ về nguy hiểm" mà các task đọc và gọi tới.</p></div>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="crash"><span class="en">1. StateTree in 5 minutes (just what you need for this file)</span><span class="vi">1. StateTree trong 5 phút (chỉ những gì cần cho file này)</span></h2>
+<table>
+<tr><th style="width:210px"><span class="en">Concept</span><span class="vi">Khái niệm</span></th><th><span class="en">What it means here</span><span class="vi">Ý nghĩa trong file này</span></th></tr>
+<tr><td><b>State</b></td><td><span class="en">A box in the tree. When a state is active, <b>all of its ancestors are active too</b>. If <i>Move to Flanking Point</i> is active, then <i>Flanking</i>, <i>Select Behaviors at Random</i> and <i>Root</i> are active as well, and all their tasks run in parallel.</span><span class="vi">Một ô trong cây. Khi một state đang active, <b>tất cả state tổ tiên của nó cũng active</b>. Nếu <i>Move to Flanking Point</i> đang active thì <i>Flanking</i>, <i>Select Behaviors at Random</i> và <i>Root</i> cũng active, và task của tất cả chúng chạy song song.</span></td></tr>
+<tr><td><b>Task</b></td><td><span class="en">Work done while a state is active. Examples are Move To, Delay, or a Blueprint task. Every state here uses <b>Tasks Completion = Any</b>: the state is "completed" as soon as <i>any one</i> of its tasks calls Finish Task. Tasks such as Face Actor or Set Character Speed never finish, so they just run alongside the one that does.</span><span class="vi">Công việc được thực hiện khi state đang active, ví dụ Move To, Delay, hoặc một Blueprint task. Mọi state ở đây dùng <b>Tasks Completion = Any</b>: state được coi là "completed" ngay khi <i>bất kỳ một</i> task nào gọi Finish Task. Những task như Face Actor hay Set Character Speed không bao giờ kết thúc, nên chúng chỉ chạy kèm bên cạnh task có kết thúc.</span></td></tr>
+<tr><td><b>Enter Condition</b></td><td><span class="en">A gate checked when the tree tries to <i>select</i> a state. If it fails, the state (and its whole subtree) is skipped.</span><span class="vi">Một "cổng" được kiểm tra khi cây cố <i>chọn</i> một state. Nếu không đạt, state đó (và toàn bộ cây con của nó) bị bỏ qua.</span></td></tr>
+<tr><td><b>Selection behavior</b></td><td><span class="en">How a parent picks a child. <b>Try Select Children In Order</b> tries the children top to bottom and takes the first one whose enter conditions pass. <b>Try Select Children At Random</b> shuffles them first. All children have weight 1.0, so the odds are equal.</span><span class="vi">Cách state cha chọn state con. <b>Try Select Children In Order</b> thử các con từ trên xuống dưới và lấy con đầu tiên thỏa enter condition. <b>Try Select Children At Random</b> xáo trộn các con trước. Mọi con đều có weight 1.0, nên xác suất bằng nhau.</span></td></tr>
+<tr><td><b>Transition</b></td><td><span class="en">A rule on a state: <i>"when [trigger] and [conditions], go to [target]"</i>.</span><span class="vi">Một luật gắn trên state: <i>"khi [trigger] và [conditions], đi tới [target]"</i>.</span>
+<ul class="en">
+<li>The triggers used here are <b>On State Completed</b>, <b>On State Succeeded</b>, <b>On State Failed</b> and <b>On Tick</b> (checked every update).</li>
+<li>The targets used are <b>Goto State</b> (a named state), <b>Next State</b> (the next sibling) and <b>Succeeded</b> (finish the whole tree).</li>
+</ul>
+<ul class="vi">
+<li>Các trigger dùng ở đây là <b>On State Completed</b>, <b>On State Succeeded</b>, <b>On State Failed</b> và <b>On Tick</b> (kiểm tra mỗi lần update).</li>
+<li>Các target dùng là <b>Goto State</b> (một state có tên), <b>Next State</b> (state anh em kế tiếp) và <b>Succeeded</b> (kết thúc toàn bộ cây).</li>
+</ul>
+<span class="en">Transitions on <b>parent</b> states are checked too while a child is active, so a parent's On Tick rule acts like an interrupt for its whole subtree.</span><span class="vi">Transition trên state <b>cha</b> cũng được kiểm tra khi state con đang active, nên một luật On Tick ở state cha hoạt động như một "ngắt" (interrupt) cho cả cây con.</span></td></tr>
+<tr><td><b>No transition found</b></td><td><span class="en">If a state completes and neither it nor any ancestor has a matching transition, the engine <b>goes back to the Root and selects again</b>. Several states here (Wait After Flank, Wait After Evasion, Wait after Landing, Default) rely on this "restart from Root" fallback.</span><span class="vi">Nếu một state hoàn thành mà cả nó lẫn tổ tiên đều không có transition phù hợp, engine sẽ <b>quay lại Root và chọn lại từ đầu</b>. Một số state ở đây (Wait After Flank, Wait After Evasion, Wait after Landing, Default) dựa vào cơ chế "chạy lại từ Root" này.</span></td></tr>
+<tr><td><b>Binding</b></td><td><span class="en">A wire from a data source to a task's or condition's property, such as Context Actor &rarr; <code>Character</code> or the global task's <code>Distance to Target</code> output &rarr; Compare Float <code>Left</code>. Bindings are copied in before the node runs.</span><span class="vi">Một "sợi dây" nối từ nguồn dữ liệu tới property của task hoặc condition, ví dụ Context Actor &rarr; <code>Character</code>, hay output <code>Distance to Target</code> của global task &rarr; <code>Left</code> của Compare Float. Giá trị binding được copy vào trước khi node chạy.</span></td></tr>
+<tr><td><b>Global task</b></td><td><span class="en">A task that runs for the whole life of the tree, regardless of which state is active. It is used here to keep track of the player.</span><span class="vi">Task chạy suốt vòng đời của cây, bất kể state nào đang active. Ở đây nó được dùng để theo dõi người chơi.</span></td></tr>
+<tr><td><b>Parameters</b></td><td><span class="en">Tree-level variables that act like a small blackboard. Here they hold tuning values (melee distance, evade probabilities) and two scratch vectors (Flanking/Fallback target).</span><span class="vi">Biến cấp cây, hoạt động như một blackboard nhỏ. Ở đây chúng chứa các giá trị tinh chỉnh (khoảng cách cận chiến, xác suất né) và hai vector tạm (Flanking/Fallback target).</span></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="startup"><span class="en">2. How the tree gets started</span><span class="vi">2. Cây được khởi động thế nào</span></h2>
+<div class="flow">
+  <div class="step"><b>BP_Combat_EnemySpawner</b><small>Enemy Class = BP_EnemyNPC</small></div><span class="arrow">&rarr;</span>
+  <div class="step"><b>BP_EnemyNPC</b> spawned<small>Auto Possess AI = Placed in World or Spawned<br>AI Controller Class = BP_CombatAIController</small></div><span class="arrow">&rarr;</span>
+  <div class="step"><b>BP_CombatAIController</b> possesses<small class="en">Has a <code>StateTreeAI</code> component whose StateTree = ST_CombatEnemy</small><small class="vi">Có component <code>StateTreeAI</code> với StateTree = ST_CombatEnemy</small></div><span class="arrow">&rarr;</span>
+  <div class="step"><b>ST_CombatEnemy</b> starts<small>Context Actor = possessed pawn<br>Context AIController = controller</small></div>
+</div>
+<p class="en"><code>BP_CombatAIController</code> has <b>no graph logic at all</b>. Its EventGraph only holds a comment saying the StateTree starts automatically once the pawn is possessed. All of the behavior lives in the StateTree and its tasks. Swapping the tree for another enemy means changing the StateTree asset on the controller's <code>StateTreeAI</code> component, or making a second controller.</p>
+<p class="vi"><code>BP_CombatAIController</code> <b>hoàn toàn không có logic trong graph</b>. EventGraph của nó chỉ có một comment nói rằng StateTree sẽ tự khởi động khi pawn được possess. Toàn bộ hành vi nằm trong StateTree và các task của nó. Muốn đổi cây cho một kẻ địch khác, bạn đổi asset StateTree trên component <code>StateTreeAI</code> của controller, hoặc tạo một controller thứ hai.</p>
+<p class="en">When the tree starts, the AI component schema fills in two <b>context</b> objects that every node can bind to:</p>
+<p class="vi">Khi cây khởi động, schema của AI component điền vào hai object <b>context</b> mà mọi node đều có thể bind tới:</p>
+<ul class="en">
+<li><b>Actor</b>: the pawn, which must be a <code>BP_EnemyNPC</code> (the Context Actor Class).</li>
+<li><b>AIController</b>: the <code>BP_CombatAIController</code> instance.</li>
+</ul>
+<ul class="vi">
+<li><b>Actor</b>: pawn, bắt buộc phải là <code>BP_EnemyNPC</code> (Context Actor Class).</li>
+<li><b>AIController</b>: instance của <code>BP_CombatAIController</code>.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="data"><span class="en">3. The data the tree works with</span><span class="vi">3. Dữ liệu mà cây sử dụng</span></h2>
+
+<h3 id="context">3.1 Context</h3>
+<table>
+<tr><th>Context</th><th><span class="en">Type</span><span class="vi">Kiểu</span></th><th><span class="en">Bound into</span><span class="vi">Được bind vào</span></th></tr>
+<tr><td><b>Actor</b></td><td>BP_EnemyNPC</td><td>
+<ul class="en">
+<li>The <code>Character</code> of every Blueprint task and condition: Set Character Speed, Combo/Charged Attack, Wait For Landing, Is In Danger, Is Character Grounded.</li>
+<li><code>Attack Source</code> of Get Player Info.</li>
+<li><code>ReferenceActor</code> of every Debug Text task, so the text floats above the enemy.</li>
+<li>Its <code>Current HP</code> and <code>Life Bar Widget.CurrentHealth</code>, used for the death checks.</li>
+</ul>
+<ul class="vi">
+<li><code>Character</code> của mọi Blueprint task và condition: Set Character Speed, Combo/Charged Attack, Wait For Landing, Is In Danger, Is Character Grounded.</li>
+<li><code>Attack Source</code> của Get Player Info.</li>
+<li><code>ReferenceActor</code> của mọi task Debug Text, để chữ hiện lơ lửng trên đầu kẻ địch.</li>
+<li><code>Current HP</code> và <code>Life Bar Widget.CurrentHealth</code> của nó, dùng để kiểm tra chết.</li>
+</ul></td></tr>
+<tr><td><b>AIController</b></td><td>BP_CombatAIController</td><td>
+<ul class="en">
+<li><code>AIController</code> of every Move To task.</li>
+<li><code>QueryOwner</code> of every Run Env Query task.</li>
+<li><code>Controller</code> of Face Actor and Face Location.</li>
+</ul>
+<ul class="vi">
+<li><code>AIController</code> của mọi task Move To.</li>
+<li><code>QueryOwner</code> của mọi task Run Env Query.</li>
+<li><code>Controller</code> của Face Actor và Face Location.</li>
+</ul></td></tr>
+</table>
+
+<h3 id="params"><span class="en">3.2 Parameters (tree-level variables)</span><span class="vi">3.2 Parameters (biến cấp cây)</span></h3>
+<table>
+<tr><th>Parameter</th><th><span class="en">Type</span><span class="vi">Kiểu</span></th><th><span class="en">Default</span><span class="vi">Mặc định</span></th><th><span class="en">Used by</span><span class="vi">Được dùng bởi</span></th></tr>
+<tr><td><code>TargetMeleeDistance</code></td><td>double</td><td>100</td><td><span class="en"><code>Right</code> side of the distance checks on <i>Close in for Melee</i> (&gt;) and <i>Melee</i> (&le;)</span><span class="vi">Vế <code>Right</code> của phép so khoảng cách trên <i>Close in for Melee</i> (&gt;) và <i>Melee</i> (&le;)</span></td></tr>
+<tr><td><code>EvadeProbabilityIdle</code></td><td>double</td><td>0.9</td><td><span class="en">Random threshold for Idling &rarr; Evading and Wait After Melee &rarr; Evading</span><span class="vi">Ngưỡng Random cho Idling &rarr; Evading và Wait After Melee &rarr; Evading</span></td></tr>
+<tr><td><code>EvadeProbabilityMoving</code></td><td>double</td><td>0.6</td><td><span class="en">Random threshold for Flanking &rarr; Evading and Move to Fallback Point &rarr; Evading</span><span class="vi">Ngưỡng Random cho Flanking &rarr; Evading và Move to Fallback Point &rarr; Evading</span></td></tr>
+<tr><td><code>EvadeProbabilityAttacking</code></td><td>double</td><td>0.25</td><td><span class="en">Random threshold for Close in for Melee &rarr; Evading</span><span class="vi">Ngưỡng Random cho Close in for Melee &rarr; Evading</span></td></tr>
+<tr><td><code>FlankingTarget</code></td><td>Vector</td><td>(0,0,0)</td><td><span class="en">Written by the Flank <b>and</b> Evade EQS results; read by Move to Flanking Point and Move to Evasion Point</span><span class="vi">Được ghi bởi kết quả EQS Flank <b>và</b> Evade; được đọc bởi Move to Flanking Point và Move to Evasion Point</span></td></tr>
+<tr><td><code>FallbackTarget</code></td><td>Vector</td><td>(0,0,0)</td><td><span class="en">Written by the Fallback EQS; read by Move to Fallback Point</span><span class="vi">Được ghi bởi EQS Fallback; được đọc bởi Move to Fallback Point</span></td></tr>
+</table>
+<div class="box tip"><span class="en">These are the knobs to turn when you tune the enemy. Change them in the StateTree's <b>Parameters</b> panel, or override them per controller on the <code>StateTreeAI</code> component, without touching any graph.</span><span class="vi">Đây là các "núm vặn" khi bạn tinh chỉnh kẻ địch. Đổi chúng trong panel <b>Parameters</b> của StateTree, hoặc override theo từng controller trên component <code>StateTreeAI</code>, mà không cần đụng vào graph nào.</span></div>
+
+<h3 id="global">3.3 Global task: Get Player Info</h3>
+<p class="en"><code>StateTreeTask_GetPlayerInfo</code> sits in the tree's <b>Global Tasks</b>, so it runs the entire time the tree is running. On <b>every Tick</b> it:</p>
+<p class="vi"><code>StateTreeTask_GetPlayerInfo</code> nằm trong <b>Global Tasks</b> của cây, nên nó chạy suốt thời gian cây chạy. Ở <b>mỗi Tick</b> nó:</p>
+<ol class="en">
+<li>Sets <code>Target Player Character</code> = <code>Get Player Pawn(0)</code>.</li>
+<li>If that pawn is valid, sets <code>Target Player Location</code> = its actor location.</li>
+<li>Sets <code>Distance to Target</code> = distance from <code>Attack Source</code> (bound to the enemy) to the player location.</li>
+</ol>
+<ol class="vi">
+<li>Gán <code>Target Player Character</code> = <code>Get Player Pawn(0)</code>.</li>
+<li>Nếu pawn đó hợp lệ, gán <code>Target Player Location</code> = vị trí actor của nó.</li>
+<li>Gán <code>Distance to Target</code> = khoảng cách từ <code>Attack Source</code> (được bind tới kẻ địch) tới vị trí người chơi.</li>
+</ol>
+<p class="en">It never calls Finish Task. Its three <b>outputs</b> are the tree's eyes, and they are bound all over the tree:</p>
+<p class="vi">Nó không bao giờ gọi Finish Task. Ba <b>output</b> của nó là "đôi mắt" của cây, và được bind ở khắp nơi trong cây:</p>
+<table>
+<tr><th>Output</th><th><span class="en">Feeds</span><span class="vi">Cung cấp cho</span></th></tr>
+<tr><td><code>Target Player Character</code></td><td><span class="en">The <i>Object Is Valid</i> enter condition of <i>Select Behaviors at Random</i>; every Face Actor's <code>Actor to Face Towards</code>; Close in for Melee's Move To <code>TargetActor</code></span><span class="vi">Enter condition <i>Object Is Valid</i> của <i>Select Behaviors at Random</i>; <code>Actor to Face Towards</code> của mọi Face Actor; <code>TargetActor</code> của Move To trong Close in for Melee</span></td></tr>
+<tr><td><code>Distance to Target</code></td><td><span class="en"><code>Left</code> of the distance checks on Close in for Melee and Melee</span><span class="vi">Vế <code>Left</code> của phép so khoảng cách trên Close in for Melee và Melee</span></td></tr>
+<tr><td><code>Target Player Location</code></td><td><span class="en">Face Location in <i>Move to Fallback Point</i> (back away while still looking at the player)</span><span class="vi">Face Location trong <i>Move to Fallback Point</i> (lùi lại nhưng vẫn nhìn người chơi)</span></td></tr>
+</table>
+<div class="box warn"><span class="en">Because the outputs are only filled on <b>Tick</b>, they are still empty (null / 0) during the very first state selection after the tree starts. The Root's <i>Default</i> state was designed to cover exactly this ("gives Global Tasks a chance to run and gather valid data"), but see <a href="#issues">section 10</a> for why <i>Evading</i> currently catches it instead.</span><span class="vi">Vì các output chỉ được điền khi <b>Tick</b>, chúng vẫn còn rỗng (null / 0) trong lần chọn state đầu tiên ngay sau khi cây khởi động. State <i>Default</i> của Root được thiết kế để xử lý đúng tình huống này ("gives Global Tasks a chance to run and gather valid data"), nhưng hãy xem <a href="#issues">mục 10</a> để hiểu vì sao hiện tại <i>Evading</i> lại "hứng" tình huống đó.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="diagram"><span class="en">4. The full tree</span><span class="vi">4. Toàn bộ cây</span></h2>
+<p class="legend">
+<span><span class="sel">[in order]</span> / <span class="sel">[random]</span> = <span class="en">child selection</span><span class="vi i">cách chọn con</span></span>
+<span><span class="cond">&#9888; enter condition</span></span>
+<span><span class="tsk">&#9654; tasks</span></span>
+<span class="trn" style="display:inline"><b>&#8627;</b> transitions</span>
+</p>
+<p class="en">Children are listed in their real order, as stored in the compiled tree. The order matters for "in order" selection. State, task and node names are kept as they appear in the editor.</p>
+<p class="vi">Các state con được liệt kê theo đúng thứ tự thật, như được lưu trong cây đã compile. Thứ tự này quan trọng với kiểu chọn "in order". Tên state, task và node được giữ nguyên như trong editor.</p>
+
+<ul class="tree">
+<li><span class="st root">Root</span><span class="sel">[in order]</span>
+  <span class="trn"><b>&#8627; On Tick</b> if <code>Actor.Current HP &le; 0</code> &rarr; <b>Dead</b></span>
+  <span class="trn">Global task: <span class="tsk">&#9654; Get Player Info</span></span>
+  <ul>
+  <li><span class="num">1</span><span class="st dead">Dead</span> <span class="cond">&#9888; Life Bar Widget.CurrentHealth &le; 0</span> <span class="tsk">&#9654; Debug Text "Dead"</span> <span class="sel">tag: Status.Death</span>
+    <span class="trn"><b>&#8627; On Tick</b> &rarr; <b>Tree Succeeded</b> &nbsp;|&nbsp; <b>On Completed</b> &rarr; <b>Tree Succeeded</b></span></li>
+
+  <li><span class="num">2</span><span class="st">Select Behaviors at Random</span><span class="sel">[random]</span> <span class="cond">&#9888; Object Is Valid (Target Player Character)</span>
+    <span class="trn"><b>&#8627; On Tick</b> if Is Character Grounded (Must Be on Air = true) &rarr; <b>Launched</b></span>
+    <ul>
+    <li><span class="st">Attacking</span><span class="sel">[in order]</span> <span class="tsk">&#9654; Debug Text "Attacking"</span>
+      <ul>
+      <li><span class="st leaf">Close in for Melee</span> <span class="cond">&#9888; Distance to Target &gt; TargetMeleeDistance</span>
+        <span class="tsk">&#9654; Move To (player, radius 50) &middot; Set Character Speed 600</span>
+        <span class="trn"><b>&#8627; On Succeeded</b> &rarr; Next (<b>Melee</b>) &nbsp;|&nbsp; <b>On Tick</b> if Random &lt; 0.25 AND Is In Danger &rarr; <b>Evading</b></span></li>
+      <li><span class="st">Melee</span><span class="sel">[in order]</span> <span class="cond">&#9888; Distance to Target &le; TargetMeleeDistance</span>
+        <ul>
+        <li><span class="st">Melee Attack</span><span class="sel">[random]</span> <span class="tsk">&#9654; Face Actor (player)</span>
+          <span class="trn"><b>&#8627; On Succeeded</b> &rarr; Next (Find Fallback Point)</span>
+          <ul>
+          <li><span class="st leaf">Combo Attack</span> <span class="tsk">&#9654; Combo Attack</span> <span class="trn"><b>&#8627; On Completed</b> &rarr; <b>Find Fallback Point</b></span></li>
+          <li><span class="st leaf">Charged Attack</span> <span class="tsk">&#9654; Charged Attack</span> <span class="trn"><b>&#8627; On Completed</b> &rarr; <b>Find Fallback Point</b></span></li>
+          </ul></li>
+        <li><span class="st leaf">Find Fallback Point</span> <span class="tsk">&#9654; Run Env Query EnvQuery_Fallback (150&ndash;300, Random Best 25%) &rarr; FallbackTarget</span>
+          <span class="trn"><b>&#8627; On Succeeded</b> &rarr; Next (Move to Fallback Point) &nbsp;|&nbsp; <b>On Failed</b> &rarr; <b>Wait After Melee</b></span></li>
+        <li><span class="st leaf">Move to Fallback Point</span> <span class="tsk">&#9654; Move To FallbackTarget (radius 25) &middot; Set Speed 300 &middot; Face Location (player location)</span>
+          <span class="trn"><b>&#8627; On Completed</b> &rarr; Next (Wait After Melee) &nbsp;|&nbsp; <b>On Tick</b> if Random &lt; 0.6 AND Is In Danger &rarr; <b>Evading</b></span></li>
+        <li><span class="st leaf">Wait After Melee</span> <span class="tsk">&#9654; Delay 0.5 &plusmn; 0.25 s &middot; Face Actor (player)</span>
+          <span class="trn"><b>&#8627; On Tick</b> if Random &lt; 0.9 AND Is In Danger &rarr; <b>Evading</b> &nbsp;|&nbsp; <b>On Completed</b> &rarr; <b>Root</b></span></li>
+        </ul></li>
+      </ul></li>
+    <li><span class="st leaf">Idling</span> <span class="tsk">&#9654; Delay 0.5 &plusmn; 0.2 s &middot; Debug Text "Idling" &middot; Face Actor (player)</span>
+      <span class="trn"><b>&#8627; On Completed</b> &rarr; <b>Root</b> &nbsp;|&nbsp; <b>On Tick</b> if Random &lt; 0.9 AND Is In Danger &rarr; <b>Evading</b></span></li>
+    <li><span class="st">Flanking</span><span class="sel">[in order]</span> <span class="tsk">&#9654; Debug Text "Flanking"</span>
+      <span class="trn"><b>&#8627; On Tick</b> if Random &lt; 0.6 AND Is In Danger &rarr; <b>Evading</b></span>
+      <ul>
+      <li><span class="st leaf">Find Flanking Point</span> <span class="tsk">&#9654; Run Env Query EnvQuery_Flank (350&ndash;750, Random Best 25%) &rarr; FlankingTarget</span>
+        <span class="trn"><b>&#8627; On Succeeded</b> &rarr; Next &nbsp;|&nbsp; <b>On Failed</b> &rarr; <b>Idling</b></span></li>
+      <li><span class="st leaf">Move to Flanking Point</span> <span class="tsk">&#9654; Face Actor (player) &middot; Move To FlankingTarget (radius 5, strafe) &middot; Set Speed 300</span>
+        <span class="trn"><b>&#8627; On Succeeded</b> &rarr; Next (Wait After Flank)</span></li>
+      <li><span class="st leaf">Wait After Flank</span> <span class="tsk">&#9654; Delay 0.4 &plusmn; 0.2 s &middot; Face Actor (player)</span>
+        <span class="trn">(<span class="en">no transition &rarr; restart from Root</span><span class="vi i">không có transition &rarr; chạy lại từ Root</span>)</span></li>
+      </ul></li>
+    </ul></li>
+
+  <li><span class="num">3</span><span class="st">Evading</span><span class="sel">[in order]</span> <span class="tsk">&#9654; Debug Text "Evading" &middot; Face Actor (player)</span>
+    <ul>
+    <li><span class="st leaf">Find Evasion Point</span> <span class="tsk">&#9654; Run Env Query EnvQuery_Evade (sample 100&ndash;250, evade 120&ndash;300, Random Best 5%) &rarr; FlankingTarget</span>
+      <span class="trn"><b>&#8627; On Succeeded</b> &rarr; Next</span></li>
+    <li><span class="st leaf">Move to Evasion Point</span> <span class="tsk">&#9654; Move To FlankingTarget (radius 5, strafe) &middot; Set Speed 600</span>
+      <span class="trn"><b>&#8627; On Succeeded</b> &rarr; Next</span></li>
+    <li><span class="st leaf">Wait After Evasion</span> <span class="tsk">&#9654; Delay 0.3 &plusmn; 0.2 s</span>
+      <span class="trn">(<span class="en">no transition &rarr; restart from Root</span><span class="vi i">không có transition &rarr; chạy lại từ Root</span>)</span></li>
+    </ul></li>
+
+  <li><span class="num">4</span><span class="st">Launched</span><span class="sel">[in order]</span> <span class="cond">&#9888; Is Character Grounded (Must Be on Air = true)</span> <span class="tsk">&#9654; Debug Text "Launched"</span>
+    <span class="trn"><b>&#8627; On Completed</b> &rarr; <b>Root</b></span>
+    <ul>
+    <li><span class="st leaf">Wait for Landing</span> <span class="tsk">&#9654; Wait For Landing</span> <span class="trn"><b>&#8627; On Completed</b> &rarr; Next</span></li>
+    <li><span class="st leaf">Wait after Landing</span> <span class="tsk">&#9654; Delay 0.3 &plusmn; 0.2 s</span></li>
+    </ul></li>
+
+  <li><span class="num">5</span><span class="st leaf">Default</span> <span class="tsk">&#9654; Delay 0.1 s</span> <span class="trn">(<span class="en">no transition &rarr; restart from Root</span><span class="vi i">không có transition &rarr; chạy lại từ Root</span>)</span></li>
+  </ul>
+</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="walk"><span class="en">5. State-by-state walkthrough</span><span class="vi">5. Đi qua từng state</span></h2>
+
+<h3 id="s-root">Root <span style="color:var(--muted);font-size:14px">(Try Select Children In Order)</span></h3>
+<p class="en">Each time the tree (re)selects from Root, it tries the five children top to bottom: <b>Dead &rarr; Select Behaviors at Random &rarr; Evading &rarr; Launched &rarr; Default</b>, and enters the first one whose enter conditions pass.</p>
+<p class="vi">Mỗi lần cây chọn (lại) từ Root, nó thử năm state con từ trên xuống: <b>Dead &rarr; Select Behaviors at Random &rarr; Evading &rarr; Launched &rarr; Default</b>, và vào state đầu tiên thỏa enter condition.</p>
+<p class="en">Root has one <b>On Tick</b> transition: <i>if <code>Actor.Current HP &le; 0</code>, go to Dead</i>. This uses a <b>Compare Float</b> condition (operator Less Or Equal, Right = 0). Because it sits on Root, which is always active, it is checked every update no matter what the enemy is doing, so death interrupts everything.</p>
+<p class="vi">Root có một transition <b>On Tick</b>: <i>nếu <code>Actor.Current HP &le; 0</code> thì đi tới Dead</i>. Nó dùng condition <b>Compare Float</b> (operator Less Or Equal, Right = 0). Vì nằm trên Root, vốn luôn active, nên nó được kiểm tra mỗi lần update bất kể kẻ địch đang làm gì. Nhờ vậy cái chết sẽ ngắt mọi hành động khác.</p>
+
+<h3 id="s-dead">Dead</h3>
+<ul class="en">
+<li><b>Description:</b> "When the enemy's HP falls to zero, finish the StateTree".</li>
+<li><b>Enter condition:</b> Compare Float, <code>Actor.Life Bar Widget.CurrentHealth &le; 0</code>. Note that this reads the <b>life bar widget's</b> health, while Root's transition reads the pawn's <code>Current HP</code> variable. Both must agree (see <a href="#issues">section 10</a>).</li>
+<li><b>Task:</b> Debug Text "Dead".</li>
+<li><b>Transitions:</b> On Tick &rarr; <b>Succeeded</b>, and On Completed &rarr; <b>Succeeded</b>. "Succeeded" as a target means <i>stop the whole tree with success</i>. So on its first update after entering, the tree ends and the enemy has no more AI logic. The body's own death handling (ragdoll, <code>On Enemy Died</code> &rarr; spawner) is done in <code>BP_EnemyNPC</code>, not here.</li>
+<li><b>State tag:</b> <code>Status.Death</code>. This is a StateTree <i>state tag</i>, used to query which state is active. It is not added to the actor's ability system component.</li>
+</ul>
+<ul class="vi">
+<li><b>Mô tả:</b> "When the enemy's HP falls to zero, finish the StateTree" (khi HP kẻ địch về 0, kết thúc StateTree).</li>
+<li><b>Enter condition:</b> Compare Float, <code>Actor.Life Bar Widget.CurrentHealth &le; 0</code>. Lưu ý: nó đọc máu của <b>widget thanh máu</b>, trong khi transition của Root đọc biến <code>Current HP</code> của pawn. Hai giá trị này phải khớp nhau (xem <a href="#issues">mục 10</a>).</li>
+<li><b>Task:</b> Debug Text "Dead".</li>
+<li><b>Transition:</b> On Tick &rarr; <b>Succeeded</b>, và On Completed &rarr; <b>Succeeded</b>. Target "Succeeded" nghĩa là <i>dừng toàn bộ cây với kết quả thành công</i>. Vì vậy ngay lần update đầu tiên sau khi vào state, cây kết thúc và kẻ địch không còn logic AI nào nữa. Phần xử lý chết của cơ thể (ragdoll, <code>On Enemy Died</code> &rarr; spawner) được làm trong <code>BP_EnemyNPC</code>, không phải ở đây.</li>
+<li><b>State tag:</b> <code>Status.Death</code>. Đây là <i>state tag</i> của StateTree, dùng để truy vấn state nào đang active. Nó không được thêm vào ability system component của actor.</li>
+</ul>
+
+<h3 id="s-select">Select Behaviors at Random <span style="color:var(--muted);font-size:14px">(Try Select Children At Random)</span></h3>
+<ul class="en">
+<li><b>Description:</b> "Randomly choose between Idling, Flanking and Attacking".</li>
+<li><b>Enter condition:</b> <i>Object Is Valid</i> on <code>Target Player Character</code>. The enemy only picks a behavior if a player pawn exists.</li>
+<li><b>Children:</b> Attacking, Idling, Flanking, all with weight 1. Each time this state is entered, the three are shuffled and the first valid one is chosen. Each behavior has roughly a 1/3 chance; Attacking always passes because one of its two children is always valid.</li>
+<li><b>On Tick transition</b> &rarr; <b>Launched</b> when <i>Is Character Grounded</i> with <code>Must Be on Air = true</code> passes, which really means "the enemy is airborne". Because this sits on the parent, any behavior is interrupted the moment the enemy gets knocked into the air (for example by your claw attack or a launch).</li>
+</ul>
+<ul class="vi">
+<li><b>Mô tả:</b> "Randomly choose between Idling, Flanking and Attacking" (chọn ngẫu nhiên giữa Idling, Flanking và Attacking).</li>
+<li><b>Enter condition:</b> <i>Object Is Valid</i> trên <code>Target Player Character</code>. Kẻ địch chỉ chọn hành vi khi có pawn người chơi.</li>
+<li><b>State con:</b> Attacking, Idling, Flanking, đều có weight 1. Mỗi lần vào state này, ba con được xáo trộn và con hợp lệ đầu tiên được chọn. Mỗi hành vi có khoảng 1/3 cơ hội; Attacking luôn hợp lệ vì một trong hai con của nó luôn thỏa điều kiện.</li>
+<li><b>Transition On Tick</b> &rarr; <b>Launched</b> khi <i>Is Character Grounded</i> với <code>Must Be on Air = true</code> thỏa, tức thực chất là "kẻ địch đang ở trên không". Vì nằm trên state cha, mọi hành vi đều bị ngắt ngay khi kẻ địch bị hất lên không (ví dụ bởi đòn claw của bạn hoặc một cú launch).</li>
+</ul>
+
+<h3 id="s-attacking">Attacking &rarr; Close in for Melee / Melee</h3>
+<p class="en"><b>Attacking</b> (in order) shows the debug text "Attacking" and picks one of two children using the distance to the player:</p>
+<p class="vi"><b>Attacking</b> (in order) hiện debug text "Attacking" và chọn một trong hai con dựa trên khoảng cách tới người chơi:</p>
+<table>
+<tr><th><span class="en">Child</span><span class="vi">State con</span></th><th>Enter condition</th><th><span class="en">What happens</span><span class="vi">Điều gì xảy ra</span></th></tr>
+<tr><td><b>Close in for Melee</b></td><td><code>Distance to Target &gt; TargetMeleeDistance</code> (100)</td><td>
+<ul class="en">
+<li><b>Move To</b> with <code>TargetActor</code> = player and <code>AIController</code> = context. Settings: acceptable radius 50, track moving goal, partial paths allowed, no strafing.</li>
+<li><b>Set Character Speed</b> 600 (run).</li>
+<li><b>On Succeeded &rarr; Next State</b>, which is the sibling <b>Melee</b>.</li>
+<li><b>On Tick &rarr; Evading</b> if <code>Random &lt; EvadeProbabilityAttacking</code> (0.25) AND <i>Is In Danger</i>.</li>
+</ul>
+<ul class="vi">
+<li><b>Move To</b> với <code>TargetActor</code> = người chơi và <code>AIController</code> = context. Thiết lập: acceptable radius 50, track moving goal, cho phép partial path, không strafe.</li>
+<li><b>Set Character Speed</b> 600 (chạy).</li>
+<li><b>On Succeeded &rarr; Next State</b>, tức state anh em <b>Melee</b>.</li>
+<li><b>On Tick &rarr; Evading</b> nếu <code>Random &lt; EvadeProbabilityAttacking</code> (0.25) VÀ <i>Is In Danger</i>.</li>
+</ul></td></tr>
+<tr><td><b>Melee</b></td><td><code>Distance to Target &le; TargetMeleeDistance</code></td><td><span class="en">Runs its four children in sequence (below).</span><span class="vi">Chạy lần lượt bốn state con (bên dưới).</span></td></tr>
+</table>
+<p class="en">The <b>Melee</b> sequence:</p>
+<p class="vi">Chuỗi <b>Melee</b>:</p>
+<ol class="en">
+<li><b>Melee Attack</b> (random): faces the player (<code>SetFocus</code>) and randomly picks <b>Combo Attack</b> or <b>Charged Attack</b>.
+  <ul>
+  <li>Each child runs a Blueprint task that binds to <code>BP_EnemyNPC.On Attack Completed</code>, then calls <code>Do AI Combo Attack</code> or <code>Do AI Charged Attack</code>, which plays the montage.</li>
+  <li>When the montage completes <i>or is interrupted</i>, the dispatcher fires and the task finishes with success.</li>
+  <li>Both children have <b>On Completed &rarr; Find Fallback Point</b>. Melee Attack also has On Succeeded &rarr; Next, which leads to the same place.</li>
+  </ul></li>
+<li><b>Find Fallback Point</b>: runs <code>EnvQuery_Fallback</code> with <code>Min Fallback Distance = 150</code> and <code>Max Fallback Distance = 300</code>, using mode <i>Random Best 25%</i>. The result is written into the <code>FallbackTarget</code> parameter. On success it goes to Next; on failure it skips straight to <b>Wait After Melee</b>.</li>
+<li><b>Move to Fallback Point</b>: Move To <code>FallbackTarget</code> (radius 25) at speed 300, while <b>Face Location</b> keeps the enemy looking at the player's position (so it backs off facing you). On Completed it goes to Next. While moving, <b>On Tick &rarr; Evading</b> if <code>Random &lt; 0.6</code> AND <i>Is In Danger</i>.</li>
+<li><b>Wait After Melee</b>: Delay 0.5 s &plusmn; 0.25 s while facing the player. On Tick &rarr; Evading if <code>Random &lt; 0.9</code> AND <i>Is In Danger</i>. On Completed &rarr; <b>Root</b>, which picks a fresh behavior.</li>
+</ol>
+<ol class="vi">
+<li><b>Melee Attack</b> (random): quay mặt về người chơi (<code>SetFocus</code>) và chọn ngẫu nhiên <b>Combo Attack</b> hoặc <b>Charged Attack</b>.
+  <ul>
+  <li>Mỗi con chạy một Blueprint task bind vào <code>BP_EnemyNPC.On Attack Completed</code>, rồi gọi <code>Do AI Combo Attack</code> hoặc <code>Do AI Charged Attack</code> để phát montage.</li>
+  <li>Khi montage chạy xong <i>hoặc bị ngắt</i>, dispatcher được gọi và task kết thúc với kết quả thành công.</li>
+  <li>Cả hai con đều có <b>On Completed &rarr; Find Fallback Point</b>. Melee Attack cũng có On Succeeded &rarr; Next, dẫn tới cùng chỗ đó.</li>
+  </ul></li>
+<li><b>Find Fallback Point</b>: chạy <code>EnvQuery_Fallback</code> với <code>Min Fallback Distance = 150</code> và <code>Max Fallback Distance = 300</code>, dùng mode <i>Random Best 25%</i>. Kết quả được ghi vào parameter <code>FallbackTarget</code>. Thành công thì đi Next; thất bại thì nhảy thẳng tới <b>Wait After Melee</b>.</li>
+<li><b>Move to Fallback Point</b>: Move To <code>FallbackTarget</code> (radius 25) với tốc độ 300, trong khi <b>Face Location</b> giữ kẻ địch nhìn về vị trí người chơi (nên nó lùi lại mà vẫn đối mặt với bạn). On Completed thì đi Next. Trong lúc di chuyển, <b>On Tick &rarr; Evading</b> nếu <code>Random &lt; 0.6</code> VÀ <i>Is In Danger</i>.</li>
+<li><b>Wait After Melee</b>: Delay 0.5 s &plusmn; 0.25 s trong khi nhìn người chơi. On Tick &rarr; Evading nếu <code>Random &lt; 0.9</code> VÀ <i>Is In Danger</i>. On Completed &rarr; <b>Root</b>, để chọn một hành vi mới.</li>
+</ol>
+<div class="box art"><b class="label"><span class="en">The pattern</span><span class="vi">Khuôn mẫu</span></b><span class="en">Approach &rarr; hit &rarr; step back &rarr; pause &rarr; decide again. That rhythm is what makes the enemy feel like it's "taking turns" instead of face-hugging you.</span><span class="vi">Tiếp cận &rarr; đánh &rarr; lùi lại &rarr; dừng một chút &rarr; quyết định lại. Chính nhịp điệu này khiến kẻ địch có cảm giác "đánh theo lượt" thay vì dính sát mặt bạn.</span></div>
+
+<h3 id="s-idling">Idling</h3>
+<ul class="en">
+<li><b>Tasks:</b> Delay 0.5 s &plusmn; 0.2 s, Debug Text "Idling", and Face Actor (player). The Delay is the only task that finishes.</li>
+<li><b>On Completed &rarr; Root</b>, which picks another random behavior.</li>
+<li><b>On Tick &rarr; Evading</b> if <code>Random &lt; EvadeProbabilityIdle</code> (0.9) AND <i>Is In Danger</i>. An idle enemy is the most likely to dodge.</li>
+</ul>
+<ul class="vi">
+<li><b>Task:</b> Delay 0.5 s &plusmn; 0.2 s, Debug Text "Idling", và Face Actor (người chơi). Delay là task duy nhất có kết thúc.</li>
+<li><b>On Completed &rarr; Root</b>, để chọn ngẫu nhiên một hành vi khác.</li>
+<li><b>On Tick &rarr; Evading</b> nếu <code>Random &lt; EvadeProbabilityIdle</code> (0.9) VÀ <i>Is In Danger</i>. Kẻ địch đang đứng yên là kẻ dễ né nhất.</li>
+</ul>
+
+<h3 id="s-flanking">Flanking</h3>
+<ol class="en">
+<li><b>Find Flanking Point</b>: <code>EnvQuery_Flank</code> with <code>Min Flank Distance = 350</code> and <code>Max Flank Distance = 750</code>, mode Random Best 25%. The result goes to <code>FlankingTarget</code>. On success &rarr; Next; on failure &rarr; <b>Idling</b> (a direct Goto, so it skips the random pick).</li>
+<li><b>Move to Flanking Point</b>: Move To <code>FlankingTarget</code> with radius 5 and <b>strafe allowed</b>, at speed 300, while Face Actor keeps the player in focus. The result is that the enemy circles you while watching you. On Succeeded &rarr; Next.</li>
+<li><b>Wait After Flank</b>: Delay 0.4 s &plusmn; 0.2 s while facing the player. It has no transitions, so when it completes the tree restarts from Root.</li>
+</ol>
+<ol class="vi">
+<li><b>Find Flanking Point</b>: <code>EnvQuery_Flank</code> với <code>Min Flank Distance = 350</code> và <code>Max Flank Distance = 750</code>, mode Random Best 25%. Kết quả ghi vào <code>FlankingTarget</code>. Thành công &rarr; Next; thất bại &rarr; <b>Idling</b> (Goto trực tiếp, nên bỏ qua bước chọn ngẫu nhiên).</li>
+<li><b>Move to Flanking Point</b>: Move To <code>FlankingTarget</code> với radius 5 và <b>cho phép strafe</b>, tốc độ 300, trong khi Face Actor giữ người chơi trong tầm nhìn. Kết quả là kẻ địch đi vòng quanh bạn mà vẫn nhìn bạn. On Succeeded &rarr; Next.</li>
+<li><b>Wait After Flank</b>: Delay 0.4 s &plusmn; 0.2 s trong khi nhìn người chơi. Nó không có transition, nên khi xong cây sẽ chạy lại từ Root.</li>
+</ol>
+<p class="en">The <b>Flanking</b> parent has <b>On Tick &rarr; Evading</b> if <code>Random &lt; EvadeProbabilityMoving</code> (0.6) AND <i>Is In Danger</i>. It covers all three children.</p>
+<p class="vi">State cha <b>Flanking</b> có <b>On Tick &rarr; Evading</b> nếu <code>Random &lt; EvadeProbabilityMoving</code> (0.6) VÀ <i>Is In Danger</i>. Nó áp dụng cho cả ba state con.</p>
+
+<h3 id="s-evading">Evading</h3>
+<p class="en">Reached mainly through the many "Is In Danger" tick transitions. It shows the debug text "Evading", faces the player, and runs three steps:</p>
+<p class="vi">Chủ yếu được vào qua các transition tick "Is In Danger". Nó hiện debug text "Evading", quay mặt về người chơi, và chạy ba bước:</p>
+<ol class="en">
+<li><b>Find Evasion Point</b>: <code>EnvQuery_Evade</code> with sample distance 100&ndash;250 and evasion distance 120&ndash;300, mode <i>Random Best 5%</i>. The result is written to <code>FlankingTarget</code> (the same parameter Flanking uses; there is no separate evasion parameter).</li>
+<li><b>Move to Evasion Point</b>: Move To <code>FlankingTarget</code> with radius 5 and strafe, at speed <b>600</b>. It is a fast sidestep.</li>
+<li><b>Wait After Evasion</b>: Delay 0.3 s &plusmn; 0.2 s, then the tree restarts from Root.</li>
+</ol>
+<ol class="vi">
+<li><b>Find Evasion Point</b>: <code>EnvQuery_Evade</code> với sample distance 100&ndash;250 và evasion distance 120&ndash;300, mode <i>Random Best 5%</i>. Kết quả ghi vào <code>FlankingTarget</code> (cùng parameter mà Flanking dùng; không có parameter riêng cho việc né).</li>
+<li><b>Move to Evasion Point</b>: Move To <code>FlankingTarget</code> với radius 5 và strafe, tốc độ <b>600</b>. Đây là một cú né ngang nhanh.</li>
+<li><b>Wait After Evasion</b>: Delay 0.3 s &plusmn; 0.2 s, sau đó cây chạy lại từ Root.</li>
+</ol>
+<p class="en">Find Evasion Point and Move to Evasion Point have no <i>failed</i> transition. If the query or the move fails, nothing in Evading or Root handles it, so the tree falls back to re-selecting from Root.</p>
+<p class="vi">Find Evasion Point và Move to Evasion Point không có transition khi <i>failed</i>. Nếu query hoặc việc di chuyển thất bại, không có gì trong Evading hay Root xử lý, nên cây quay về chọn lại từ Root.</p>
+
+<h3 id="s-launched">Launched</h3>
+<ul class="en">
+<li><b>Description:</b> "If the character leaves the ground, we abort other behaviors and wait for landing before resuming."</li>
+<li><b>Enter condition:</b> Is Character Grounded with <code>Must Be on Air = true</code>, meaning the enemy is in the air.</li>
+<li><b>Wait for Landing:</b> binds to the character's <code>LandedDelegate</code> and finishes when the character lands.</li>
+<li><b>Wait after Landing:</b> Delay 0.3 s &plusmn; 0.2 s, a short recovery.</li>
+<li><b>Exit:</b> Launched's <b>On Completed &rarr; Root</b> resumes normal behavior.</li>
+</ul>
+<ul class="vi">
+<li><b>Mô tả:</b> "If the character leaves the ground, we abort other behaviors and wait for landing before resuming." (Nếu nhân vật rời mặt đất, hủy các hành vi khác và chờ tiếp đất rồi mới tiếp tục.)</li>
+<li><b>Enter condition:</b> Is Character Grounded với <code>Must Be on Air = true</code>, nghĩa là kẻ địch đang ở trên không.</li>
+<li><b>Wait for Landing:</b> bind vào <code>LandedDelegate</code> của character và kết thúc khi character tiếp đất.</li>
+<li><b>Wait after Landing:</b> Delay 0.3 s &plusmn; 0.2 s, một khoảng hồi phục ngắn.</li>
+<li><b>Thoát ra:</b> <b>On Completed &rarr; Root</b> của Launched đưa kẻ địch trở lại hành vi bình thường.</li>
+</ul>
+<p class="en">It is entered through the tick transition on <i>Select Behaviors at Random</i>, or through Root's in-order selection if the enemy is airborne when Root re-selects.</p>
+<p class="vi">Nó được vào qua transition tick trên <i>Select Behaviors at Random</i>, hoặc qua việc chọn in-order của Root nếu kẻ địch đang ở trên không lúc Root chọn lại.</p>
+
+<h3 id="s-default">Default</h3>
+<p class="en">Description: "If we can't find anything else to do, we wait for a bit before choosing again. This is also useful to give Global Tasks a chance to run and gather valid data." It holds a single Delay of 0.1 s and has no transition, so it restarts from Root. <b>However</b>, with the current child order it can never be selected; see <a href="#issues">section 10</a>.</p>
+<p class="vi">Mô tả: "If we can't find anything else to do, we wait for a bit before choosing again. This is also useful to give Global Tasks a chance to run and gather valid data." (Nếu không tìm được việc gì khác để làm, chờ một chút rồi chọn lại. Điều này cũng giúp Global Task có cơ hội chạy và thu thập dữ liệu hợp lệ.) Nó chỉ có một Delay 0.1 s và không có transition, nên sẽ chạy lại từ Root. <b>Tuy nhiên</b>, với thứ tự con hiện tại thì nó không bao giờ được chọn; xem <a href="#issues">mục 10</a>.</p>
+
+<!-- ============================================================ -->
+<h2 id="scenario"><span class="en">6. A play-through, tick by tick</span><span class="vi">6. Một trận đấu, từng tick một</span></h2>
+<ol class="en">
+<li>The spawner spawns <b>BP_EnemyNPC</b>. <b>BP_CombatAIController</b> possesses it and the <code>StateTreeAI</code> component starts the tree. <b>Get Player Info</b> begins ticking.</li>
+<li>Root selects in order:
+  <ul>
+  <li>Dead? HP &gt; 0, so no.</li>
+  <li>Select Behaviors? Yes once the global task has found the player pawn.</li>
+  <li>The random pick lands on, say, <b>Flanking</b>.</li>
+  </ul></li>
+<li>Find Flanking Point succeeds &rarr; the enemy strafes around you at speed 300, always facing you &rarr; it pauses for about 0.4 s &rarr; back to Root.</li>
+<li>Next pick: <b>Attacking</b>. You are 600 units away, so <b>Close in for Melee</b> runs at speed 600. When the move succeeds it goes to <b>Melee</b>, whose enter check (&le; 100) passes.</li>
+<li>Melee Attack randomly picks <b>Charged Attack</b> &rarr; the montage plays &rarr; <code>On Attack Completed</code> fires &rarr; Find Fallback Point &rarr; the enemy backs off 150&ndash;300 units while facing you &rarr; Wait After Melee &rarr; Root.</li>
+<li>You swing at it. Your attack calls <b>Notify Danger</b> on the enemy, which stores <code>Last Danger Time/Location</code>. Between 0.35 s and 0.75 s later, <i>Is In Danger</i> becomes true if you are inside its 120&deg; view cone. Each tick in that window, the active Evading transition rolls its random check (0.9 while idle, 0.6 while moving, 0.25 while closing in) &rarr; <b>Evading</b>: a quick sidestep at speed 600.</li>
+<li>Your claw launches it into the air &rarr; the tick transition on Select Behaviors fires &rarr; <b>Launched</b> &rarr; it waits for <code>Landed</code> &rarr; a short pause &rarr; Root.</li>
+<li>HP reaches 0 &rarr; Root's tick transition &rarr; <b>Dead</b> (if the life bar's CurrentHealth is also &le; 0) &rarr; next tick the tree finishes with <i>Succeeded</i>.</li>
+</ol>
+<ol class="vi">
+<li>Spawner spawn ra <b>BP_EnemyNPC</b>. <b>BP_CombatAIController</b> possess nó và component <code>StateTreeAI</code> khởi động cây. <b>Get Player Info</b> bắt đầu tick.</li>
+<li>Root chọn theo thứ tự:
+  <ul>
+  <li>Dead? HP &gt; 0, nên không.</li>
+  <li>Select Behaviors? Có, khi global task đã tìm thấy pawn người chơi.</li>
+  <li>Chọn ngẫu nhiên rơi vào, giả sử, <b>Flanking</b>.</li>
+  </ul></li>
+<li>Find Flanking Point thành công &rarr; kẻ địch strafe vòng quanh bạn với tốc độ 300, luôn nhìn về phía bạn &rarr; dừng khoảng 0.4 s &rarr; quay về Root.</li>
+<li>Lần chọn tiếp theo: <b>Attacking</b>. Bạn đang cách 600 unit, nên <b>Close in for Melee</b> chạy với tốc độ 600. Khi di chuyển thành công, nó đi tới <b>Melee</b>, và điều kiện vào (&le; 100) được thỏa.</li>
+<li>Melee Attack chọn ngẫu nhiên <b>Charged Attack</b> &rarr; montage được phát &rarr; <code>On Attack Completed</code> được gọi &rarr; Find Fallback Point &rarr; kẻ địch lùi 150&ndash;300 unit mà vẫn nhìn bạn &rarr; Wait After Melee &rarr; Root.</li>
+<li>Bạn vung đòn vào nó. Đòn đánh của bạn gọi <b>Notify Danger</b> trên kẻ địch, lưu lại <code>Last Danger Time/Location</code>. Từ 0.35 s đến 0.75 s sau đó, <i>Is In Danger</i> trở thành true nếu bạn nằm trong nón tầm nhìn 120&deg; của nó. Mỗi tick trong khoảng thời gian đó, transition Evading đang active sẽ tung xúc xắc (0.9 khi đứng yên, 0.6 khi di chuyển, 0.25 khi đang áp sát) &rarr; <b>Evading</b>: một cú né ngang nhanh với tốc độ 600.</li>
+<li>Đòn claw của bạn hất nó lên không &rarr; transition tick trên Select Behaviors kích hoạt &rarr; <b>Launched</b> &rarr; nó chờ <code>Landed</code> &rarr; dừng ngắn &rarr; Root.</li>
+<li>HP về 0 &rarr; transition tick của Root &rarr; <b>Dead</b> (nếu CurrentHealth của thanh máu cũng &le; 0) &rarr; tick tiếp theo cây kết thúc với <i>Succeeded</i>.</li>
+</ol>
+<div class="box tip"><b class="label"><span class="en">Why the reaction-time window matters</span><span class="vi">Vì sao khoảng thời gian phản xạ quan trọng</span></b><span class="en">Is In Danger is only true between <i>Min Reaction Time</i> and <i>Max Reaction Time</i> after the threat. That delay is a fake "reaction time": the enemy doesn't dodge in the same frame you press attack, but it also forgets old threats.</span><span class="vi">Is In Danger chỉ true trong khoảng giữa <i>Min Reaction Time</i> và <i>Max Reaction Time</i> sau mối đe dọa. Độ trễ này là một "thời gian phản xạ" giả lập: kẻ địch không né ngay trong cùng frame bạn bấm tấn công, nhưng cũng sẽ quên đi các mối đe dọa cũ.</span></div>
+<div class="box warn"><b class="label"><span class="en">The evade "probabilities" are per tick</span><span class="vi">"Xác suất" né được tính theo từng tick</span></b><span class="en">The Random condition passes when a random number in [0, 1) is below the Threshold, and On Tick transitions are checked on every StateTree update. During a 0.4 s danger window there are many ticks, so even 0.25 becomes a very high chance overall. If you want a true "25% chance to dodge per attack", the roll needs to happen once, for example in the condition Blueprint or on danger notification.</span><span class="vi">Condition Random thỏa khi một số ngẫu nhiên trong [0, 1) nhỏ hơn Threshold, và transition On Tick được kiểm tra ở mỗi lần StateTree update. Trong khoảng nguy hiểm 0.4 s có rất nhiều tick, nên ngay cả 0.25 cũng trở thành xác suất tổng rất cao. Nếu bạn muốn đúng nghĩa "25% cơ hội né mỗi đòn", việc tung xúc xắc chỉ nên diễn ra một lần, ví dụ trong Blueprint condition hoặc lúc nhận thông báo nguy hiểm.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="tasks"><span class="en">7. Custom tasks &amp; conditions (<code>StateTreeTasks/</code>)</span><span class="vi">7. Task &amp; condition tự viết (<code>StateTreeTasks/</code>)</span></h2>
+<p class="en">All are Blueprints in <code>Content/Variant_Combat/Blueprints/AI/StateTreeTasks/</code>. Tasks derive from <code>StateTreeTaskBlueprintBase</code>, conditions from <code>StateTreeConditionBlueprintBase</code>.</p>
+<p class="vi">Tất cả đều là Blueprint trong <code>Content/Variant_Combat/Blueprints/AI/StateTreeTasks/</code>. Task kế thừa từ <code>StateTreeTaskBlueprintBase</code>, condition kế thừa từ <code>StateTreeConditionBlueprintBase</code>.</p>
+<p class="en">Variable categories matter:</p>
+<p class="vi">Category của biến rất quan trọng:</p>
+<ul class="en">
+<li><b>Context</b> variables are auto-bound to the matching context (Actor or AIController).</li>
+<li><b>Input</b> variables must be bound.</li>
+<li><b>Output</b> variables can be bound <i>from</i>.</li>
+<li>Anything else is a <b>Parameter</b> you set per instance.</li>
+</ul>
+<ul class="vi">
+<li>Biến <b>Context</b> được tự động bind vào context tương ứng (Actor hoặc AIController).</li>
+<li>Biến <b>Input</b> bắt buộc phải được bind.</li>
+<li>Biến <b>Output</b> có thể được dùng làm nguồn để bind <i>từ</i> đó.</li>
+<li>Còn lại là <b>Parameter</b> mà bạn đặt giá trị cho từng instance.</li>
+</ul>
+<p class="en">Most Enter/Exit events first check that <code>Transition.ChangeType == Changed</code>. That way a task doesn't restart when its state is re-entered as "sustained".</p>
+<p class="vi">Hầu hết event Enter/Exit đều kiểm tra trước <code>Transition.ChangeType == Changed</code>. Nhờ vậy task không bị khởi động lại khi state của nó được vào lại ở dạng "sustained".</p>
+<table>
+<tr><th style="width:210px">Blueprint</th><th><span class="en">Variables</span><span class="vi">Biến</span></th><th><span class="en">What the graph does</span><span class="vi">Graph làm gì</span></th><th><span class="en">Used in</span><span class="vi">Được dùng ở</span></th></tr>
+<tr><td><b>StateTreeTask_GetPlayerInfo</b></td><td>Context <code>Attack Source</code> (Pawn); Output <code>Target Player Character</code>, <code>Target Player Location</code>, <code>Distance to Target</code></td><td><span class="en">Tick: gets player pawn 0, its location and the distance from Attack Source. Never finishes.</span><span class="vi">Tick: lấy player pawn 0, vị trí của nó và khoảng cách từ Attack Source. Không bao giờ kết thúc.</span></td><td>Global task</td></tr>
+<tr><td><b>StateTreeTask_SetCharacterSpeed</b></td><td>Context <code>Character</code> (C++ <code>ACharacterBase</code>); <code>Speed</code></td><td><span class="en">EnterState: <code>CharacterMovement.MaxWalkSpeed = Speed</code>. Never finishes. It does <b>not</b> restore the speed on exit, so the speed stays until the next Set Speed.</span><span class="vi">EnterState: <code>CharacterMovement.MaxWalkSpeed = Speed</code>. Không bao giờ kết thúc. Nó <b>không</b> khôi phục tốc độ khi thoát, nên tốc độ giữ nguyên cho tới lần Set Speed tiếp theo.</span></td><td>Close in for Melee (600), Move to Fallback (300), Move to Flanking (300), Move to Evasion (600)</td></tr>
+<tr><td><b>StateTreeTask_FaceActor</b></td><td>Context <code>Controller</code> (AIController); Input <code>Actor to Face Towards</code></td><td><span class="en">EnterState: <code>SetFocus(Actor)</code>. ExitState: <code>ClearFocus</code>. Never finishes.</span><span class="vi">EnterState: <code>SetFocus(Actor)</code>. ExitState: <code>ClearFocus</code>. Không bao giờ kết thúc.</span></td><td>Idling, Wait After Flank, Move to Flanking, Melee Attack, Wait After Melee, Evading</td></tr>
+<tr><td><b>StateTreeTask_FaceLocation</b></td><td>Context <code>Controller</code>; <code>Face Location</code> (Vector)</td><td><span class="en">EnterState: <code>SetFocalPoint(Face Location)</code>. ExitState: <code>ClearFocus</code>. The location is captured once on enter.</span><span class="vi">EnterState: <code>SetFocalPoint(Face Location)</code>. ExitState: <code>ClearFocus</code>. Vị trí chỉ được lấy một lần lúc vào state.</span></td><td>Move to Fallback Point</td></tr>
+<tr><td><b>StateTreeTask_ComboAttack</b></td><td>Context <code>Character</code> (<code>BP_EnemyNPC</code>)</td><td><span class="en">EnterState: binds "Attack Completed" to <code>Character.On Attack Completed</code>, then calls <code>Do AI Combo Attack</code>. When the dispatcher fires: <code>FinishTask(true)</code>. ExitState: unbinds.</span><span class="vi">EnterState: bind "Attack Completed" vào <code>Character.On Attack Completed</code>, rồi gọi <code>Do AI Combo Attack</code>. Khi dispatcher được gọi: <code>FinishTask(true)</code>. ExitState: unbind.</span></td><td>Combo Attack</td></tr>
+<tr><td><b>StateTreeTask_ChargedAttack</b></td><td><span class="en">Same as Combo</span><span class="vi">Giống Combo</span></td><td><span class="en">Same, but calls <code>Do AI Charged Attack</code>.</span><span class="vi">Giống vậy, nhưng gọi <code>Do AI Charged Attack</code>.</span></td><td>Charged Attack</td></tr>
+<tr><td><b>StateTreeTask_WaitForLanding</b></td><td>Context <code>Character</code> (<code>BP_EnemyNPC</code>)</td><td><span class="en">EnterState: binds to the engine's <code>LandedDelegate</code>. On Landed: <code>FinishTask(true)</code>. ExitState: unbinds.</span><span class="vi">EnterState: bind vào <code>LandedDelegate</code> có sẵn của engine. Khi Landed: <code>FinishTask(true)</code>. ExitState: unbind.</span></td><td>Wait for Landing</td></tr>
+<tr><td><b>StateTreeCondition_IsInDanger</b></td><td>Context <code>Character</code> (<code>BP_EnemyNPC</code>); <code>Min Reaction Time</code> 0.35, <code>Max Reaction Time</code> 0.75, <code>Danger Sight Cone Angle Degrees</code> 120 <span class="en">(values as set in this tree)</span><span class="vi">(giá trị được đặt trong cây này)</span></td><td>
+<ul class="en">
+<li><code>elapsed = GameTime − Character.Last Danger Time</code>.</li>
+<li>Returns false unless <code>Min &lt; elapsed &lt; Max</code>.</li>
+<li>Otherwise returns <code>Dot(normalize(Last Danger Location − ActorLocation), ActorForward) &gt; Cos(angle)</code>, meaning the threat is in front of the enemy.</li>
+</ul>
+<ul class="vi">
+<li><code>elapsed = GameTime − Character.Last Danger Time</code>.</li>
+<li>Trả về false trừ khi <code>Min &lt; elapsed &lt; Max</code>.</li>
+<li>Ngược lại trả về <code>Dot(normalize(Last Danger Location − ActorLocation), ActorForward) &gt; Cos(angle)</code>, nghĩa là mối đe dọa ở phía trước kẻ địch.</li>
+</ul></td><td><span class="en">All 5 "&rarr; Evading" tick transitions</span><span class="vi">Cả 5 transition tick "&rarr; Evading"</span></td></tr>
+<tr><td><b>StateTreeCondition_IsCharacterGrounded</b></td><td>Context <code>Character</code> (<code>ACharacterBase</code>); <code>Must Be on Air</code> <span class="en">(true in both uses)</span><span class="vi">(true ở cả hai chỗ dùng)</span></td><td><span class="en"><code>g = MovementComponent.IsMovingOnGround()</code>; returns <code>!g</code> when Must Be on Air, otherwise <code>g</code>.</span><span class="vi"><code>g = MovementComponent.IsMovingOnGround()</code>; trả về <code>!g</code> khi Must Be on Air, ngược lại trả về <code>g</code>.</span></td><td><span class="en">Launched enter condition; Select Behaviors &rarr; Launched transition</span><span class="vi">Enter condition của Launched; transition Select Behaviors &rarr; Launched</span></td></tr>
+</table>
+
+<h4><span class="en">Engine nodes used</span><span class="vi">Các node có sẵn của engine được dùng</span></h4>
+<table>
+<tr><th>Node</th><th><span class="en">Notes</span><span class="vi">Ghi chú</span></th></tr>
+<tr><td>Move To (<code>StateTreeMoveToTask</code>, GameplayStateTree module)</td><td><span class="en">Finishes with success when it arrives and with failure if pathing fails. Bound to <code>AIController</code> + either <code>TargetActor</code> or <code>Destination</code>.</span><span class="vi">Kết thúc thành công khi tới nơi và thất bại nếu tìm đường thất bại. Được bind tới <code>AIController</code> + <code>TargetActor</code> hoặc <code>Destination</code>.</span></td></tr>
+<tr><td>Run Env Query (<code>StateTreeRunEnvQueryTask</code>)</td><td><span class="en">Runs an EQS asset with <code>QueryOwner</code> = AIController. Its <code>Result</code> output is bound <i>into</i> a tree parameter (FlankingTarget/FallbackTarget). It succeeds if the query finds an item and fails otherwise.</span><span class="vi">Chạy một asset EQS với <code>QueryOwner</code> = AIController. Output <code>Result</code> của nó được bind <i>vào</i> một parameter của cây (FlankingTarget/FallbackTarget). Thành công nếu query tìm được item, ngược lại thất bại.</span></td></tr>
+<tr><td>Delay</td><td><span class="en">Duration &plusmn; Random Deviation, then succeeds.</span><span class="vi">Duration &plusmn; Random Deviation, sau đó thành công.</span></td></tr>
+<tr><td>Debug Text</td><td><span class="en">Draws the state name above <code>ReferenceActor</code> (the enemy). Shown in editor/development only.</span><span class="vi">Vẽ tên state phía trên <code>ReferenceActor</code> (kẻ địch). Chỉ hiển thị trong editor/development build.</span></td></tr>
+<tr><td>Compare Float, Object Is Valid, Random</td><td><span class="en">Built-in conditions. Random passes when <code>rand[0,1) &lt; Threshold</code>.</span><span class="vi">Condition có sẵn. Random thỏa khi <code>rand[0,1) &lt; Threshold</code>.</span></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="bindings"><span class="en">8. All property bindings</span><span class="vi">8. Toàn bộ property binding</span></h2>
+<p class="en">Decoded from the asset's binding table. "Actor" and "AIController" are the schema contexts; "Params" are the tree parameters; "Global" is Get Player Info.</p>
+<p class="vi">Giải mã từ bảng binding của asset. "Actor" và "AIController" là các context của schema; "Params" là các parameter của cây; "Global" là Get Player Info.</p>
+<table>
+<tr><th><span class="en">Source</span><span class="vi">Nguồn</span></th><th><span class="en">&rarr; Target (state : node . property)</span><span class="vi">&rarr; Đích (state : node . property)</span></th></tr>
+<tr><td>Actor</td><td>Global Get Player Info . Attack Source</td></tr>
+<tr><td>Actor . <code>Current HP</code></td><td>Root : transition &rarr; Dead : Compare Float . Left</td></tr>
+<tr><td>Actor . <code>Life Bar Widget.CurrentHealth</code></td><td>Dead : enter Compare Float . Left</td></tr>
+<tr><td>Actor</td><td>Character of: Set Character Speed (×4), Combo Attack, Charged Attack, Wait For Landing, Is In Danger (×5), Is Character Grounded (×2); ReferenceActor of Debug Text (Dead, Attacking, Idling, Flanking, Evading, Launched)</td></tr>
+<tr><td>AIController</td><td>AIController of Move To (Close in for Melee, Move to Fallback/Flanking/Evasion Point); QueryOwner of Run Env Query (Find Fallback/Flanking/Evasion Point); Controller of Face Actor (×6) and Face Location</td></tr>
+<tr><td>Global . <code>Target Player Character</code></td><td>Select Behaviors : Object Is Valid . Object; Close in for Melee : Move To . TargetActor; Face Actor . Actor to Face Towards (Idling, Move to Flanking Point, Wait After Flank, Melee Attack, Wait After Melee, Evading)</td></tr>
+<tr><td>Global . <code>Distance to Target</code></td><td>Close in for Melee : Compare Float . Left; Melee : Compare Float . Left</td></tr>
+<tr><td>Global . <code>Target Player Location</code></td><td>Move to Fallback Point : Face Location . Face Location</td></tr>
+<tr><td>Params . <code>TargetMeleeDistance</code></td><td>Close in for Melee . Right; Melee . Right</td></tr>
+<tr><td>Params . <code>EvadeProbabilityAttacking</code></td><td>Close in for Melee : &rarr;Evading Random . Threshold</td></tr>
+<tr><td>Params . <code>EvadeProbabilityMoving</code></td><td>Flanking, Move to Fallback Point : &rarr;Evading Random . Threshold</td></tr>
+<tr><td>Params . <code>EvadeProbabilityIdle</code></td><td>Idling, Wait After Melee : &rarr;Evading Random . Threshold</td></tr>
+<tr><td>Find Flanking Point . Result / Find Evasion Point . Result</td><td>&rarr; Params . <code>FlankingTarget</code> &rarr; Move to Flanking Point . Destination, Move to Evasion Point . Destination</td></tr>
+<tr><td>Find Fallback Point . Result</td><td>&rarr; Params . <code>FallbackTarget</code> &rarr; Move to Fallback Point . Destination</td></tr>
+</table>
+<div class="box tip"><span class="en">Some Random conditions show a different inline Threshold in the asset (0.15, 0.35, 0.8, or 0). Those values are <b>ignored</b> because the Threshold is bound to a parameter, and bindings override the inline value.</span><span class="vi">Một số condition Random hiển thị Threshold inline khác trong asset (0.15, 0.35, 0.8, hoặc 0). Các giá trị đó <b>bị bỏ qua</b> vì Threshold đã được bind tới một parameter, và binding luôn ghi đè giá trị inline.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="files"><span class="en">9. Connected files map</span><span class="vi">9. Bản đồ các file liên quan</span></h2>
+<table>
+<tr><th>File</th><th><span class="en">Role</span><span class="vi">Vai trò</span></th><th><span class="en">Direction</span><span class="vi">Quan hệ</span></th></tr>
+<tr><td><code>Content/Variant_Combat/Blueprints/AI/BP_CombatAIController.uasset</code></td><td><span class="en">AI controller with the <code>StateTreeAI</code> component that runs this tree. It is the tree's only referencer, and also the schema's AI Controller Class.</span><span class="vi">AI controller có component <code>StateTreeAI</code> chạy cây này. Đây là asset duy nhất tham chiếu tới cây, đồng thời là AI Controller Class của schema.</span></td><td><span class="en">runs the tree</span><span class="vi">chạy cây</span></td></tr>
+<tr><td><code>Content/Characters/NPC/BP_EnemyNPC.uasset</code></td><td><span class="en">Context Actor Class. It provides <code>Current HP</code>, <code>Life Bar Widget</code> (WBP_NPCLifeBar), <code>On Attack Completed</code>, <code>Do AI Combo/Charged Attack</code>, and <code>Last Danger Time/Location</code> (written by <code>Notify Danger</code>, part of <code>BPI_Damageable</code>). Parent: C++ <code>ACharacterBase</code>.</span><span class="vi">Context Actor Class. Cung cấp <code>Current HP</code>, <code>Life Bar Widget</code> (WBP_NPCLifeBar), <code>On Attack Completed</code>, <code>Do AI Combo/Charged Attack</code>, và <code>Last Danger Time/Location</code> (được ghi bởi <code>Notify Danger</code>, thuộc <code>BPI_Damageable</code>). Class cha: C++ <code>ACharacterBase</code>.</span></td><td><span class="en">the body</span><span class="vi">cơ thể</span></td></tr>
+<tr><td><code>Content/Variant_Combat/Blueprints/AI/BP_Combat_EnemySpawner.uasset</code></td><td><span class="en">Spawns <code>BP_EnemyNPC</code> and listens to <code>On Enemy Died</code> to respawn.</span><span class="vi">Spawn <code>BP_EnemyNPC</code> và lắng nghe <code>On Enemy Died</code> để spawn lại.</span></td><td><span class="en">creates the body</span><span class="vi">tạo ra cơ thể</span></td></tr>
+<tr><td><code>Content/Variant_Combat/Blueprints/AI/BP_CombatEnemy.uasset</code></td><td><span class="en">Original template enemy, parent <code>Character</code>. It still uses BP_CombatAIController but is <b>not</b> a valid context actor any more.</span><span class="vi">Kẻ địch gốc của template, class cha <code>Character</code>. Nó vẫn dùng BP_CombatAIController nhưng <b>không còn</b> là context actor hợp lệ.</span></td><td><span class="en">legacy</span><span class="vi">cũ</span></td></tr>
+<tr><td><code>Content/Variant_Combat/Blueprints/AI/StateTreeTasks/*.uasset</code></td><td><span class="en">The 7 tasks and 2 conditions in section 7</span><span class="vi">7 task và 2 condition ở mục 7</span></td><td><span class="en">used by the tree</span><span class="vi">được cây dùng</span></td></tr>
+<tr><td><code>Content/Variant_Combat/Blueprints/AI/EQS/EnvQuery_Flank.uasset</code></td><td><span class="en">Flanking point (params Min/Max Flank Distance)</span><span class="vi">Điểm đi vòng (param Min/Max Flank Distance)</span></td><td><span class="en">used by the tree</span><span class="vi">được cây dùng</span></td></tr>
+<tr><td><code>Content/Variant_Combat/Blueprints/AI/EQS/EnvQuery_Fallback.uasset</code></td><td><span class="en">Back-off point after melee (Min/Max Fallback Distance)</span><span class="vi">Điểm lùi lại sau cận chiến (Min/Max Fallback Distance)</span></td><td><span class="en">used by the tree</span><span class="vi">được cây dùng</span></td></tr>
+<tr><td><code>Content/Variant_Combat/Blueprints/AI/EQS/EnvQuery_Evade.uasset</code></td><td><span class="en">Dodge point (Min/Max Sample Distance, Min/Max Evasion Distance)</span><span class="vi">Điểm né (Min/Max Sample Distance, Min/Max Evasion Distance)</span></td><td><span class="en">used by the tree</span><span class="vi">được cây dùng</span></td></tr>
+<tr><td><code>Source/Combat_PHKH/Public/Characters/CharacterBase.h</code></td><td><span class="en"><code>ACharacterBase</code>: the type of the <code>Character</code> context in Set Character Speed and Is Character Grounded. There is no AI-specific C++; all AI logic is Blueprint/StateTree.</span><span class="vi"><code>ACharacterBase</code>: kiểu của context <code>Character</code> trong Set Character Speed và Is Character Grounded. Không có C++ riêng cho AI; toàn bộ logic AI là Blueprint/StateTree.</span></td><td><span class="en">C++ base</span><span class="vi">lớp gốc C++</span></td></tr>
+<tr><td><span class="en">Montages</span><span class="vi">Montage</span> <code>AM_ComboAttack</code> / <code>AM_ChargedAttack</code> + notify <code>AN_AttackDamage</code>, <code>AN_AttackCombo</code>, <code>AN_ChargedAttack</code></td><td><span class="en">Played by Do AI Combo/Charged Attack. When a montage ends or is interrupted, <code>On Attack Completed</code> fires, which finishes the attack task.</span><span class="vi">Được phát bởi Do AI Combo/Charged Attack. Khi montage kết thúc hoặc bị ngắt, <code>On Attack Completed</code> được gọi, làm task tấn công kết thúc.</span></td><td><span class="en">indirect</span><span class="vi">gián tiếp</span></td></tr>
+<tr><td><code>Content/Characters/NPC/StateTree/ST_Enemy.uasset</code> (untracked)</td><td><span class="en">A separate, new tree. It is not referenced by ST_CombatEnemy.</span><span class="vi">Một cây mới, riêng biệt. ST_CombatEnemy không tham chiếu tới nó.</span></td><td><span class="en">unrelated</span><span class="vi">không liên quan</span></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="issues"><span class="en">10. Things worth knowing / fixing</span><span class="vi">10. Điều cần biết / cần sửa</span></h2>
+
+<div class="box bad"><b class="label"><span class="en">1. BP_CombatEnemy no longer matches the tree's context</span><span class="vi">1. BP_CombatEnemy không còn khớp với context của cây</span></b>
+<span class="en">The tree's Context Actor Class is <code>BP_EnemyNPC</code>, and four nodes cast <code>Character</code> to <code>BP_EnemyNPC</code>. <code>BP_CombatEnemy</code> still points at <code>BP_CombatAIController</code>, but it is a plain <code>Character</code>, not a <code>BP_EnemyNPC</code>. If a <code>BP_CombatEnemy</code> is placed in a level, its StateTree will not get a valid context actor; expect a context error in the log and no AI. Either give it a different controller/tree, or stop using it. The spawner already uses <code>BP_EnemyNPC</code>.</span>
+<span class="vi">Context Actor Class của cây là <code>BP_EnemyNPC</code>, và bốn node cast <code>Character</code> sang <code>BP_EnemyNPC</code>. <code>BP_CombatEnemy</code> vẫn trỏ tới <code>BP_CombatAIController</code>, nhưng nó chỉ là một <code>Character</code> thường, không phải <code>BP_EnemyNPC</code>. Nếu đặt một <code>BP_CombatEnemy</code> vào level, StateTree của nó sẽ không nhận được context actor hợp lệ; bạn sẽ thấy lỗi context trong log và không có AI. Hãy cho nó một controller/cây khác, hoặc thôi không dùng nó nữa. Spawner hiện đã dùng <code>BP_EnemyNPC</code>.</span></div>
+
+<div class="box warn"><b class="label"><span class="en">2. Two different HP sources decide death</span><span class="vi">2. Hai nguồn HP khác nhau cùng quyết định cái chết</span></b>
+<span class="en">Root's transition checks <code>Actor.Current HP &le; 0</code>, but Dead's enter condition checks <code>Actor.Life Bar Widget.CurrentHealth &le; 0</code>. If only one of them reaches 0, the transition fires but Dead's enter condition blocks it, and the enemy keeps fighting. This can happen, for example, if GAS damage updates the widget but not the Blueprint <code>Current HP</code>. While moving to GAS, bind both to the same source, ideally the GAS <code>Health</code> attribute or a <code>State.Death</code> tag check. Note also that this state's tag is <code>Status.Death</code>, while your GAS death tag is <code>State.Death</code>.</span>
+<span class="vi">Transition của Root kiểm tra <code>Actor.Current HP &le; 0</code>, nhưng enter condition của Dead lại kiểm tra <code>Actor.Life Bar Widget.CurrentHealth &le; 0</code>. Nếu chỉ một trong hai về 0, transition được kích hoạt nhưng enter condition của Dead chặn lại, và kẻ địch tiếp tục chiến đấu. Điều này có thể xảy ra, ví dụ khi damage từ GAS cập nhật widget nhưng không cập nhật biến Blueprint <code>Current HP</code>. Khi chuyển sang GAS, hãy bind cả hai vào cùng một nguồn, lý tưởng nhất là attribute <code>Health</code> của GAS hoặc kiểm tra tag <code>State.Death</code>. Lưu ý thêm: tag của state này là <code>Status.Death</code>, trong khi tag chết trong GAS của bạn là <code>State.Death</code>.</span></div>
+
+<div class="box warn"><b class="label"><span class="en">3. "Default" is unreachable; "Evading" catches the fallback</span><span class="vi">3. "Default" không bao giờ được chọn; "Evading" hứng trường hợp dự phòng</span></b>
+<span class="en">Root selects children in order: Dead, Select Behaviors, <b>Evading</b>, Launched, Default. Evading has <b>no enter condition</b>, so whenever Select Behaviors can't be entered (for example on the very first selection, before Get Player Info has ticked, or when there is no player pawn), Root picks Evading instead of Default. In that case the enemy tries to evade with no threat. Launched is still reached through its tick transition.<br>
+<b>Fix:</b> drag <b>Evading</b> below <b>Default</b> in the tree. Goto transitions don't care about order, so the "&rarr; Evading" rules keep working, and Default becomes the real fallback again. Alternatively, give Evading an enter condition.</span>
+<span class="vi">Root chọn các con theo thứ tự: Dead, Select Behaviors, <b>Evading</b>, Launched, Default. Evading <b>không có enter condition</b>, nên mỗi khi không vào được Select Behaviors (ví dụ ở lần chọn đầu tiên, trước khi Get Player Info kịp tick, hoặc khi không có pawn người chơi), Root sẽ chọn Evading thay vì Default. Khi đó kẻ địch cố né dù chẳng có mối đe dọa nào. Launched vẫn được vào qua transition tick của nó.<br>
+<b>Cách sửa:</b> kéo <b>Evading</b> xuống dưới <b>Default</b> trong cây. Transition Goto không phụ thuộc thứ tự, nên các luật "&rarr; Evading" vẫn hoạt động, và Default trở lại làm phương án dự phòng thật sự. Hoặc bạn có thể thêm enter condition cho Evading.</span></div>
+
+<div class="box warn"><b class="label"><span class="en">4. Evasion reuses <code>FlankingTarget</code></span><span class="vi">4. Việc né dùng lại <code>FlankingTarget</code></span></b>
+<span class="en">Find Evasion Point writes into the same <code>FlankingTarget</code> parameter as Flanking. It is harmless today, because the two never run at the same time, but an <code>EvadeTarget</code> parameter would make the tree easier to read.</span>
+<span class="vi">Find Evasion Point ghi vào cùng parameter <code>FlankingTarget</code> với Flanking. Hiện tại thì vô hại, vì hai thứ này không bao giờ chạy cùng lúc, nhưng một parameter <code>EvadeTarget</code> riêng sẽ giúp cây dễ đọc hơn.</span></div>
+
+<div class="box tip"><b class="label"><span class="en">5. Leftover nodes in the task Blueprints</span><span class="vi">5. Node thừa còn sót trong các Blueprint task</span></b>
+<span class="en">Combo Attack, Charged Attack and Wait For Landing still contain <b>disconnected</b> Bind/Unbind/Call nodes targeting <code>BP_CombatEnemy_C</code>, left over from the migration. They never execute, but deleting them avoids confusion and removes the hard reference to <code>BP_CombatEnemy</code>.</span>
+<span class="vi">Combo Attack, Charged Attack và Wait For Landing vẫn còn các node Bind/Unbind/Call <b>không được nối</b> nhắm tới <code>BP_CombatEnemy_C</code>, sót lại từ lúc chuyển đổi. Chúng không bao giờ chạy, nhưng xóa đi sẽ tránh gây nhầm lẫn và bỏ được hard reference tới <code>BP_CombatEnemy</code>.</span></div>
+
+<div class="box tip"><b class="label"><span class="en">6. Attacks always "succeed"</span><span class="vi">6. Đòn tấn công luôn "thành công"</span></b>
+<span class="en">The attack tasks finish with success both when the montage completes <i>and</i> when it is interrupted (for example when the enemy gets hit, because <code>Apply Damage</code> stops the montages). The tree therefore always goes to Find Fallback Point after an attack attempt, even an interrupted one. That is fine for this design; just be aware of it.</span>
+<span class="vi">Các task tấn công kết thúc thành công cả khi montage chạy xong <i>lẫn</i> khi bị ngắt (ví dụ khi kẻ địch bị đánh trúng, vì <code>Apply Damage</code> dừng các montage). Vì vậy sau mỗi lần thử tấn công, kể cả bị ngắt, cây luôn đi tới Find Fallback Point. Với thiết kế này thì không sao; chỉ cần bạn biết điều đó.</span></div>
+
+<div class="box art"><b class="label"><span class="en">GAS migration idea (ties into your learning plan)</span><span class="vi">Ý tưởng chuyển sang GAS (gắn với lộ trình học của bạn)</span></b>
+<span class="en">Replace <code>Do AI Combo Attack</code> with a small task that calls <i>Try Activate Ability by Tag</i> on the enemy's ASC, and finishes when the ability ends. Replace the two HP checks with a condition that reads the <code>Health</code> attribute or checks the <code>State.Death</code> tag. The StateTree structure stays exactly the same; only the "hands" change.</span>
+<span class="vi">Thay <code>Do AI Combo Attack</code> bằng một task nhỏ gọi <i>Try Activate Ability by Tag</i> trên ASC của kẻ địch, và kết thúc khi ability kết thúc. Thay hai phép kiểm tra HP bằng một condition đọc attribute <code>Health</code> hoặc kiểm tra tag <code>State.Death</code>. Cấu trúc StateTree giữ nguyên hoàn toàn; chỉ có "đôi tay" thay đổi.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="debug"><span class="en">11. How to watch it run</span><span class="vi">11. Cách quan sát cây chạy</span></h2>
+<ul class="en">
+<li><b>Debug text:</b> in PIE, each behavior state prints its name ("Idling", "Flanking", "Attacking", "Evading", "Launched", "Dead") above the enemy's head.</li>
+<li><b>StateTree Debugger:</b> open <code>ST_CombatEnemy</code>, open <i>Window &rarr; Debugger</i>, press record, then play. You can scrub the timeline and see which states were active and which transitions fired each frame.</li>
+<li><b>Gameplay Debugger:</b> in PIE press <kbd>'</kbd> (apostrophe) while looking at the enemy. The StateTree category shows the active state path; the AI/Navigation categories show the Move To path.</li>
+<li><b>EQS:</b> to see why a Find…Point state failed, open the EnvQuery assets and use an EQS Testing Pawn with the same parameter values listed above.</li>
+</ul>
+<ul class="vi">
+<li><b>Debug text:</b> trong PIE, mỗi state hành vi in tên của nó ("Idling", "Flanking", "Attacking", "Evading", "Launched", "Dead") phía trên đầu kẻ địch.</li>
+<li><b>StateTree Debugger:</b> mở <code>ST_CombatEnemy</code>, mở <i>Window &rarr; Debugger</i>, bấm record, rồi play. Bạn có thể kéo timeline để xem state nào active và transition nào được kích hoạt ở từng frame.</li>
+<li><b>Gameplay Debugger:</b> trong PIE bấm <kbd>'</kbd> (dấu nháy đơn) khi đang nhìn vào kẻ địch. Category StateTree hiện đường dẫn state đang active; category AI/Navigation hiện đường đi của Move To.</li>
+<li><b>EQS:</b> để xem vì sao một state Find…Point thất bại, mở các asset EnvQuery và dùng EQS Testing Pawn với cùng giá trị parameter đã liệt kê ở trên.</li>
+</ul>
+
+<footer>
+<span class="en">Generated from the project's assets on 2026-10-29 (UE 5.7.1); bilingual version 2026-10-30. The state data was read with the editor's Python API. Child order, bindings and parameter defaults were decoded from <code>ST_CombatEnemy.uasset</code>. The task graphs were read with the editor's Blueprint query tools.</span>
+<span class="vi">Tạo từ các asset của dự án ngày 29/10/2026 (UE 5.7.1); bản song ngữ ngày 30/10/2026. Dữ liệu state được đọc bằng Python API của editor. Thứ tự state con, binding và giá trị mặc định của parameter được giải mã từ <code>ST_CombatEnemy.uasset</code>. Graph của các task được đọc bằng công cụ truy vấn Blueprint của editor.</span>
+</footer>
+</main>
+
+<script>
+  (function () {
+    var KEY = "gasGuideLang";
+    var buttons = document.querySelectorAll("#lang button");
+    function setMode(mode) {
+      document.body.className = "mode-" + mode;
+      buttons.forEach(function (b) { b.classList.toggle("on", b.dataset.mode === mode); });
+      document.documentElement.lang = mode === "en" ? "en" : "vi";
+      try { localStorage.setItem(KEY, mode); } catch (e) {}
+    }
+    buttons.forEach(function (b) { b.addEventListener("click", function () { setMode(b.dataset.mode); }); });
+    var saved = null;
+    try { saved = localStorage.getItem(KEY); } catch (e) {}
+    setMode(saved === "en" || saved === "vi" ? saved : "both");
+  })();
+</script>
+</body>
+</html>

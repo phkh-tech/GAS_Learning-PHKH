@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Combat_PHKH: What I Learned About GAS / Những gì tôi học được về GAS</title>
+<style>
+  :root {
+    --bg: #14161b; --panel: #1c1f26; --panel2: #232733; --text: #d9dde6; --muted: #9aa3b5;
+    --accent: #6cb6ff; --accent2: #f0a35e; --good: #6fd08c; --warn: #ffcc66; --bad: #ff7b7b;
+    --code: #0f1115; --border: #2e3340; --vi: #b9d7a8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", Roboto, "Noto Sans", sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; }
+  nav { position: fixed; top: 0; left: 0; bottom: 0; width: 290px; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--border); padding: 20px 14px; font-size: 14px; }
+  nav h2 { font-size: 15px; color: var(--accent); margin: 0 0 12px; }
+  nav a { display: block; color: var(--muted); text-decoration: none; padding: 4px 8px; border-radius: 4px; }
+  nav a:hover { background: var(--panel2); color: var(--text); }
+  nav .sub { padding-left: 22px; font-size: 13px; }
+  main { margin-left: 290px; padding: 30px 56px 80px; max-width: 1150px; }
+  h1 { font-size: 32px; margin: 0 0 6px; }
+  h2 { margin-top: 56px; padding-bottom: 6px; border-bottom: 2px solid var(--border); color: var(--accent); }
+  h3 { margin-top: 32px; color: var(--accent2); }
+  h4 { margin-bottom: 4px; }
+  .subtitle { color: var(--muted); margin-top: 0; }
+  code { font-family: Consolas, "Cascadia Code", monospace; background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 0.92em; color: #e6c07b; }
+  pre { background: var(--code); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-size: 13.5px; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #cfd6e4; }
+  .cmt { color: #6a9955; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: var(--accent); }
+  tr:nth-child(even) td { background: #181b21; }
+  .box { border-radius: 8px; padding: 12px 16px; margin: 16px 0; border-left: 4px solid; background: var(--panel); }
+  .box.tip { border-color: var(--good); }
+  .box.warn { border-color: var(--warn); }
+  .box.bad { border-color: var(--bad); }
+  .box.art { border-color: var(--accent2); }
+  .box b.label { display: block; margin-bottom: 4px; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 16px 0; }
+  .flow .step { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 13.5px; max-width: 250px; }
+  .flow .step small { display: block; color: var(--muted); }
+  .flow .arrow { color: var(--accent); font-weight: bold; }
+  .map { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0; }
+  .map .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .map .card h4 { margin: 0 0 6px; color: var(--accent2); }
+  .map .card p { margin: 0; font-size: 14px; color: var(--muted); }
+  .week { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 6px 18px 14px; margin: 16px 0; }
+  .week h4 { color: var(--accent2); }
+  .tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--panel2); color: var(--muted); margin-left: 6px; }
+  .check li { list-style: none; }
+  .check li::before { content: "\2610  "; color: var(--accent); }
+  footer { margin-top: 60px; color: var(--muted); font-size: 13px; }
+
+  /* ---------- Language switch / Chuyển ngôn ngữ ---------- */
+  #lang { position: fixed; top: 12px; right: 16px; z-index: 10; display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
+  #lang button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 5px; cursor: pointer; }
+  #lang button.on { background: var(--accent); color: #0d1117; font-weight: 600; }
+  body.mode-en .vi { display: none !important; }
+  body.mode-vi .en { display: none !important; }
+  body.mode-both span.vi { display: block; }
+  body.mode-both .vi { color: var(--vi); }
+  body.mode-both h1 .vi, body.mode-both h2 .vi, body.mode-both h3 .vi, body.mode-both h4 .vi { font-size: 0.72em; font-weight: 500; margin-top: 2px; }
+  body.mode-both nav .vi { font-size: 12px; }
+  body.mode-both .flow .step small.vi, body.mode-both .map .card p.vi { color: var(--vi); opacity: .9; }
+  body.mode-both p.vi, body.mode-both ul.vi, body.mode-both ol.vi { margin-top: -6px; }
+  body.mode-vi .vi, body.mode-en .en { color: inherit; }
+  @media (max-width: 900px) { nav { display: none; } main { margin-left: 0; padding: 20px; } .map { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body class="mode-both">
+
+<div id="lang">
+  <button data-mode="both">EN + VI</button>
+  <button data-mode="en">English</button>
+  <button data-mode="vi">Tiếng Việt</button>
+</div>
+
+<nav>
+  <h2><span class="en">Contents</span><span class="vi">Mục lục</span></h2>
+  <a href="#intro"><span class="en">0. How to use this guide</span><span class="vi">0. Cách dùng tài liệu này</span></a>
+  <a href="#map"><span class="en">1. The big picture</span><span class="vi">1. Bức tranh tổng thể</span></a>
+  <a href="#setup"><span class="en">2. Project setup</span><span class="vi">2. Thiết lập dự án</span></a>
+  <a href="#asc">3. Ability System Component</a>
+  <a href="#attr">4. Attribute Set</a>
+  <a href="#tags">5. Gameplay Tags</a>
+  <a href="#ga">6. Gameplay Abilities</a>
+  <a class="sub" href="#ga-dash">GA_Dash</a>
+  <a class="sub" href="#ga-claw">GA_ClawAttack</a>
+  <a class="sub" href="#ga-death">GA_Death</a>
+  <a href="#ge">7. Gameplay Effects</a>
+  <a class="sub" href="#ge-burn"><span class="en">Burning area (SetByCaller)</span><span class="vi">Vùng lửa (SetByCaller)</span></a>
+  <a class="sub" href="#ge-regen"><span class="en">Health / stamina regen</span><span class="vi">Hồi Health / Stamina</span></a>
+  <a href="#events"><span class="en">8. Gameplay Events + Anim Notifies</span><span class="vi">8. Gameplay Event + Anim Notify</span></a>
+  <a href="#cues">9. Gameplay Cues</a>
+  <a href="#input">10. Input &rarr; Ability</a>
+  <a href="#ui"><span class="en">11. UI, CommonUI, input modes</span><span class="vi">11. UI, CommonUI, input mode</span></a>
+  <a href="#npc"><span class="en">12. The enemy NPC</span><span class="vi">12. NPC kẻ địch</span></a>
+  <a href="#issues"><span class="en">13. Things to clean up</span><span class="vi">13. Những chỗ cần dọn dẹp</span></a>
+  <a href="#cheat"><span class="en">14. Cheat sheet</span><span class="vi">14. Bảng tra nhanh</span></a>
+  <a href="#plan"><span class="en">15. Learning plan: StateTree &amp; BT</span><span class="vi">15. Lộ trình học: StateTree &amp; BT</span></a>
+  <a href="#links"><span class="en">16. Resources</span><span class="vi">16. Tài liệu tham khảo</span></a>
+</nav>
+
+<main>
+
+<h1><span class="en">Combat_PHKH: What I Learned About GAS</span><span class="vi">Combat_PHKH: Những gì tôi học được về GAS</span></h1>
+<p class="subtitle en">A study guide built from my own project: the Sabertooth player, its abilities, effects, UI and the enemy NPC. Unreal Engine 5.7.</p>
+<p class="subtitle vi">Tài liệu học tập được xây dựng từ chính dự án của tôi: nhân vật Sabertooth, các ability, effect, UI và NPC kẻ địch. Unreal Engine 5.7.</p>
+
+<div class="box tip"><span class="en">Use the buttons in the top-right corner to switch between <b>English</b>, <b>Tiếng Việt</b> or both. Technical names (Ability, Gameplay Effect, Tag, node names&hellip;) are kept in English in the Vietnamese text, because that's what you see in the editor.</span><span class="vi">Dùng các nút ở góc trên bên phải để chuyển giữa <b>English</b>, <b>Tiếng Việt</b> hoặc cả hai. Các thuật ngữ kỹ thuật (Ability, Gameplay Effect, Tag, tên node&hellip;) được giữ nguyên tiếng Anh trong phần tiếng Việt, vì đó là những gì bạn thấy trong editor.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="intro"><span class="en">0. How to use this guide</span><span class="vi">0. Cách dùng tài liệu này</span></h2>
+<p class="en">Every concept here is explained with something that already exists in this project. When you see an asset name like <code>GA_Dash</code>, open it in the editor next to the guide. Seeing the real graph makes the explanation stick.</p>
+<p class="vi">Mọi khái niệm ở đây đều được giải thích bằng thứ đã có sẵn trong dự án. Khi thấy tên asset như <code>GA_Dash</code>, hãy mở nó trong editor bên cạnh tài liệu. Nhìn graph thật sẽ giúp bạn nhớ lâu hơn.</p>
+<p class="en">Recommended order: read sections 1 to 5 once to learn the vocabulary. Then follow one complete feature end to end. The <b>Claw Attack</b> (sections 6, 7 and 8) is the best one, because it touches almost every part of GAS.</p>
+<p class="vi">Thứ tự nên đọc: đọc mục 1 đến 5 một lượt để nắm từ vựng. Sau đó theo dõi trọn vẹn một tính năng từ đầu đến cuối. <b>Claw Attack</b> (mục 6, 7 và 8) là ví dụ tốt nhất, vì nó chạm vào gần như mọi phần của GAS.</p>
+<div class="box art"><b class="label"><span class="en">Artist analogy</span><span class="vi">So sánh dành cho artist</span></b>
+<span class="en">Think of GAS like a material system. The <b>Ability System Component</b> is the material slot on the mesh. <b>Attributes</b> are the scalar parameters. <b>Gameplay Effects</b> are material instances that change those parameters. <b>Gameplay Tags</b> are the static switches that decide which features are on. <b>Abilities</b> are the Blueprint logic that decides <i>when</i> to apply which instance.</span>
+<span class="vi">Hãy nghĩ GAS giống hệ thống material. <b>Ability System Component</b> là material slot trên mesh. <b>Attribute</b> là các scalar parameter. <b>Gameplay Effect</b> là material instance thay đổi các parameter đó. <b>Gameplay Tag</b> là các static switch quyết định tính năng nào được bật. <b>Ability</b> là logic Blueprint quyết định <i>khi nào</i> áp dụng instance nào.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="map"><span class="en">1. The big picture</span><span class="vi">1. Bức tranh tổng thể</span></h2>
+<p class="en">GAS has six main parts. Every GAS feature in this project combines them:</p>
+<p class="vi">GAS có sáu thành phần chính. Mọi tính năng GAS trong dự án này đều là sự kết hợp của chúng:</p>
+<div class="map">
+  <div class="card"><h4>Ability System Component (ASC)</h4>
+    <p class="en">The "brain" component on the character. It owns everything else: attributes, active effects, tags and granted abilities.<br><b>Here:</b> <code>AbilitySystemComponent</code> created in <code>ACharacterBase</code>.</p>
+    <p class="vi">Component "bộ não" trên nhân vật. Nó sở hữu mọi thứ còn lại: attribute, effect đang chạy, tag và các ability đã được cấp.<br><b>Trong dự án:</b> <code>AbilitySystemComponent</code> được tạo trong <code>ACharacterBase</code>.</p></div>
+  <div class="card"><h4>Attribute Set</h4>
+    <p class="en">The numbers: Health, Stamina and so on.<br><b>Here:</b> <code>UBaseAttributeSet</code> (Health, MaxHealth, Stamina, MaxStamina, Damage).</p>
+    <p class="vi">Các con số: Health, Stamina, v.v.<br><b>Trong dự án:</b> <code>UBaseAttributeSet</code> (Health, MaxHealth, Stamina, MaxStamina, Damage).</p></div>
+  <div class="card"><h4>Gameplay Ability (GA)</h4>
+    <p class="en">Something the character <i>does</i>: dash, attack, die.<br><b>Here:</b> <code>GA_Dash</code>, <code>GA_ClawAttack</code>, <code>GA_Death</code>, <code>GA_MeleeAttack_Punch</code>.</p>
+    <p class="vi">Một việc nhân vật <i>làm</i>: lướt, tấn công, chết.<br><b>Trong dự án:</b> <code>GA_Dash</code>, <code>GA_ClawAttack</code>, <code>GA_Death</code>, <code>GA_MeleeAttack_Punch</code>.</p></div>
+  <div class="card"><h4>Gameplay Effect (GE)</h4>
+    <p class="en">A data-only "rule" that changes attributes and/or adds tags, either once, for a duration or forever.<br><b>Here:</b> <code>GE_Dash_Cost</code>, <code>GE_Dash_Cooldown</code>, <code>GE_Claw&#272;amage</code>, <code>GE_StaminaRegen</code>&hellip;</p>
+    <p class="vi">Một "luật" chỉ chứa dữ liệu, thay đổi attribute và/hoặc thêm tag: một lần, trong một khoảng thời gian, hoặc vĩnh viễn.<br><b>Trong dự án:</b> <code>GE_Dash_Cost</code>, <code>GE_Dash_Cooldown</code>, <code>GE_Claw&#272;amage</code>, <code>GE_StaminaRegen</code>&hellip;</p></div>
+  <div class="card"><h4>Gameplay Tag</h4>
+    <p class="en">Hierarchical labels like <code>Cooldown.Dash</code> or <code>State.Death</code>. Everything in GAS talks using tags.<br><b>Here:</b> <code>Config/DefaultGameplayTags.ini</code>.</p>
+    <p class="vi">Nhãn phân cấp như <code>Cooldown.Dash</code> hoặc <code>State.Death</code>. Mọi thứ trong GAS "nói chuyện" với nhau bằng tag.<br><b>Trong dự án:</b> <code>Config/DefaultGameplayTags.ini</code>.</p></div>
+  <div class="card"><h4>Gameplay Cue (GC)</h4>
+    <p class="en">Cosmetic only: VFX, sound, camera shake. It never changes gameplay.<br><b>Here:</b> <code>GC_Dash</code> (tag <code>GameplayCue.Movement.Dash</code>).</p>
+    <p class="vi">Chỉ để trình diễn: VFX, âm thanh, rung camera. Không bao giờ thay đổi gameplay.<br><b>Trong dự án:</b> <code>GC_Dash</code> (tag <code>GameplayCue.Movement.Dash</code>).</p></div>
+</div>
+<p class="en">Here is how they connect in one sentence:</p>
+<p class="vi">Cách chúng kết nối với nhau, gói gọn trong một câu:</p>
+<div class="box tip"><span class="en">The <b>ASC</b> <i>activates</i> an <b>Ability</b>. The ability <i>applies</i> <b>Effects</b>. Effects <i>change</i> <b>Attributes</b> and <i>add</i> <b>Tags</b>. Tags <i>block or allow</i> other abilities, and <b>Cues</b> make it all look good.</span><span class="vi"><b>ASC</b> <i>kích hoạt</i> một <b>Ability</b>. Ability <i>áp dụng</i> các <b>Effect</b>. Effect <i>thay đổi</i> <b>Attribute</b> và <i>thêm</i> <b>Tag</b>. Tag <i>chặn hoặc cho phép</i> các ability khác, còn <b>Cue</b> làm mọi thứ trông đẹp mắt.</span></div>
+
+<h3><span class="en">Where things live in this project</span><span class="vi">Mọi thứ nằm ở đâu trong dự án</span></h3>
+<table>
+<tr><th><span class="en">Folder / file</span><span class="vi">Thư mục / file</span></th><th><span class="en">What it contains</span><span class="vi">Chứa gì</span></th></tr>
+<tr><td><code>Source/Combat_PHKH/.../Characters/CharacterBase.*</code></td><td><span class="en">C++ base character: creates the ASC and Attribute Set, and grants abilities</span><span class="vi">Nhân vật gốc C++: tạo ASC và Attribute Set, và cấp ability</span></td></tr>
+<tr><td><code>Source/.../GA/Attributes/BaseAttributeSet.*</code></td><td><span class="en">C++ Attribute Set: Health, Stamina, Damage</span><span class="vi">Attribute Set C++: Health, Stamina, Damage</span></td></tr>
+<tr><td><code>Source/.../GameplayFramework/PlayerControllerBase.*</code></td><td><span class="en">C++ player controller and combat menu (input-mode practice)</span><span class="vi">Player controller C++ và combat menu (bài tập về input mode)</span></td></tr>
+<tr><td><code>Source/.../UI/CombatUserWidget.*</code></td><td><span class="en">C++ widget with a <code>BindWidget</code> button</span><span class="vi">Widget C++ có một nút <code>BindWidget</code></span></td></tr>
+<tr><td><code>Content/Characters/Sabertooth/BP_SaberTooth-ASC</code></td><td><span class="en">The player character (child of <code>CharacterBase</code>)</span><span class="vi">Nhân vật người chơi (lớp con của <code>CharacterBase</code>)</span></td></tr>
+<tr><td><code>Content/Characters/NPC/BP_EnemyNPC</code></td><td><span class="en">Enemy (child of <code>CharacterBase</code>, driven by a StateTree)</span><span class="vi">Kẻ địch (lớp con của <code>CharacterBase</code>, điều khiển bằng StateTree)</span></td></tr>
+<tr><td><code>Content/GAS/Abilities</code></td><td>GA_Dash, GA_Death, Attack/GA_ClawAttack, Attack/GA_MeleeAttack_Punch</td></tr>
+<tr><td><code>Content/GAS/Effects</code></td><td><span class="en">Cost, cooldown, regen, death and damage effects</span><span class="vi">Các effect cost, cooldown, hồi phục, chết và sát thương</span></td></tr>
+<tr><td><code>Content/GAS/Cues</code></td><td>GC_Dash</td></tr>
+<tr><td><code>Content/GAS/EffectActors</code></td><td><span class="en">BP_EffectArea_Burning (damage-over-time zone)</span><span class="vi">BP_EffectArea_Burning (vùng gây sát thương theo thời gian)</span></td></tr>
+<tr><td><code>Content/GAS/Notifies</code> + <code>Interfaces</code></td><td><span class="en">ANS_ClawAttack and ANS_Punch, which turn hitboxes on and off through the BPI_ClawHitbox and BPI_PunchHitBox interfaces</span><span class="vi">ANS_ClawAttack và ANS_Punch, bật/tắt hitbox thông qua interface BPI_ClawHitbox và BPI_PunchHitBox</span></td></tr>
+<tr><td><code>Content/Variant_Combat/Blueprints/AI</code></td><td><span class="en">ST_CombatEnemy (StateTree), BP_CombatAIController, StateTree tasks, EQS queries, enemy spawner</span><span class="vi">ST_CombatEnemy (StateTree), BP_CombatAIController, các StateTree task, EQS query, bộ spawn kẻ địch</span></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="setup"><span class="en">2. Project setup (one-time)</span><span class="vi">2. Thiết lập dự án (làm một lần)</span></h2>
+<p class="en">Before any GAS code compiles, three things must be in place. They're already set up in this project:</p>
+<p class="vi">Trước khi code GAS có thể compile, cần có sẵn ba thứ. Dự án này đã thiết lập xong cả ba:</p>
+<h4><span class="en">a) Plugins: <code>Combat_PHKH.uproject</code></span><span class="vi">a) Plugin: <code>Combat_PHKH.uproject</code></span></h4>
+<pre><code>"Plugins": [
+  { "Name": "GameplayAbilities", "Enabled": true },   <span class="cmt">// GAS itself · bản thân GAS</span>
+  { "Name": "GameplayStateTree", "Enabled": true },   <span class="cmt">// StateTree for AI · StateTree cho AI</span>
+  { "Name": "CommonUI",          "Enabled": true }    <span class="cmt">// menus / input routing · menu / điều phối input</span>
+]</code></pre>
+<h4><span class="en">b) Modules: <code>Source/Combat_PHKH/Combat_PHKH.Build.cs</code></span><span class="vi">b) Module: <code>Source/Combat_PHKH/Combat_PHKH.Build.cs</code></span></h4>
+<pre><code>PrivateDependencyModuleNames.AddRange(new string[]
+{
+    "GameplayAbilities",   <span class="cmt">// UAbilitySystemComponent, UGameplayAbility, UAttributeSet...</span>
+    "GameplayTags",        <span class="cmt">// FGameplayTag</span>
+    "GameplayTasks"        <span class="cmt">// Ability Tasks (PlayMontageAndWait, WaitGameplayEvent...)</span>
+});</code></pre>
+<div class="box warn"><b class="label"><span class="en">Why this matters</span><span class="vi">Vì sao điều này quan trọng</span></b>
+<span class="en">If you forget a module here, you get confusing <i>linker errors</i> ("unresolved external symbol") even though the <code>#include</code> works. Each Unreal plugin is a separate library, and Build.cs is the list of libraries your game links against.</span>
+<span class="vi">Nếu quên một module ở đây, bạn sẽ gặp <i>lỗi linker</i> khó hiểu ("unresolved external symbol") dù <code>#include</code> vẫn chạy. Mỗi plugin của Unreal là một thư viện riêng, và Build.cs là danh sách các thư viện mà game của bạn liên kết tới.</span></div>
+<h4><span class="en">c) Gameplay tags: <code>Config/DefaultGameplayTags.ini</code></span><span class="vi">c) Gameplay tag: <code>Config/DefaultGameplayTags.ini</code></span></h4>
+<p class="en">This file is written for you when you add tags in <i>Project Settings &rarr; Gameplay Tags</i>. See <a href="#tags">section 5</a>.</p>
+<p class="vi">File này được tự động ghi khi bạn thêm tag trong <i>Project Settings &rarr; Gameplay Tags</i>. Xem <a href="#tags">mục 5</a>.</p>
+
+<!-- ============================================================ -->
+<h2 id="asc"><span class="en">3. The Ability System Component (ASC)</span><span class="vi">3. Ability System Component (ASC)</span></h2>
+<p class="en">The ASC is a component, just like a Skeletal Mesh or Capsule component. An actor needs one before it can use GAS. In this project <b>both</b> the Sabertooth and the enemy NPC inherit from <code>ACharacterBase</code>, so they share the same setup.</p>
+<p class="vi">ASC là một component, giống như Skeletal Mesh hay Capsule component. Actor phải có nó thì mới dùng được GAS. Trong dự án này <b>cả</b> Sabertooth lẫn NPC kẻ địch đều kế thừa từ <code>ACharacterBase</code>, nên chúng dùng chung một cách thiết lập.</p>
+
+<h3><span class="en">3.1 Creating it: <code>CharacterBase.cpp</code> constructor</span><span class="vi">3.1 Tạo ASC: constructor trong <code>CharacterBase.cpp</code></span></h3>
+<pre><code>ACharacterBase::ACharacterBase()
+{
+    <span class="cmt">// The attribute set is created as a subobject. The ASC finds it automatically</span>
+    <span class="cmt">// because it has the same Owner actor.</span>
+    <span class="cmt">// Attribute set được tạo như một subobject. ASC tự tìm thấy nó</span>
+    <span class="cmt">// vì cả hai có cùng Owner actor.</span>
+    LayAttributeSetTaiDay = CreateDefaultSubobject&lt;UBaseAttributeSet&gt;(TEXT("LayAttributeSetTaiDay"));
+
+    AbilitySystemComponent = CreateDefaultSubobject&lt;UAbilitySystemComponent&gt;(TEXT("AbilitySystemComponent"));
+    AbilitySystemComponent-&gt;SetIsReplicated(true);                 <span class="cmt">// needed for multiplayer · cần cho multiplayer</span>
+    AbilitySystemComponent-&gt;SetReplicationMode(ASCReplicationMode); <span class="cmt">// Mixed (see below · xem bên dưới)</span>
+    ...
+}</code></pre>
+<table>
+<tr><th>Replication mode</th><th><span class="en">Use for</span><span class="vi">Dùng cho</span></th></tr>
+<tr><td><code>Full</code></td><td><span class="en">Single-player or very few actors. Everything replicates to everyone.</span><span class="vi">Chơi đơn hoặc rất ít actor. Mọi thứ được replicate tới tất cả.</span></td></tr>
+<tr><td><code>Mixed</code> <span class="en">(this project)</span><span class="vi">(dự án này)</span></td><td><span class="en">Player characters. Effects replicate fully to the owner and minimally to other players.</span><span class="vi">Nhân vật người chơi. Effect được replicate đầy đủ tới chủ sở hữu và tối thiểu tới người chơi khác.</span></td></tr>
+<tr><td><code>Minimal</code></td><td><span class="en">AI and NPCs in multiplayer. Cheapest option.</span><span class="vi">AI và NPC trong multiplayer. Lựa chọn nhẹ nhất.</span></td></tr>
+</table>
+
+<h3>3.2 <code>IAbilitySystemInterface</code></h3>
+<pre><code>class ACharacterBase : public ACharacter, public IAbilitySystemInterface
+...
+UAbilitySystemComponent* ACharacterBase::GetAbilitySystemComponent() const
+{
+    return AbilitySystemComponent;
+}</code></pre>
+<p class="en">This interface is how other systems find your ASC <i>without knowing your class</i>. Here's an example from this project: <code>BP_EffectArea_Burning</code> calls <b>Get Ability System Component (Actor)</b> on <i>whatever actor walks into it</i>. That node works because <code>CharacterBase</code> implements this interface. Without it, the node returns <i>None</i> and the burning area does nothing.</p>
+<p class="vi">Interface này là cách các hệ thống khác tìm thấy ASC của bạn <i>mà không cần biết class của bạn</i>. Ví dụ trong dự án: <code>BP_EffectArea_Burning</code> gọi <b>Get Ability System Component (Actor)</b> lên <i>bất kỳ actor nào bước vào</i>. Node đó hoạt động được là nhờ <code>CharacterBase</code> implement interface này. Nếu không có, node trả về <i>None</i> và vùng lửa chẳng làm gì cả.</p>
+
+<h3><span class="en">3.3 Initialising it: <code>InitAbilityActorInfo</code></span><span class="vi">3.3 Khởi tạo: <code>InitAbilityActorInfo</code></span></h3>
+<pre><code><span class="cmt">// SERVER: called when a controller (player or AI) possesses this pawn</span>
+<span class="cmt">// SERVER: được gọi khi một controller (người chơi hoặc AI) possess pawn này</span>
+void ACharacterBase::PossessedBy(AController* NewController)
+{
+    Super::PossessedBy(NewController);
+    if (AbilitySystemComponent)
+    {
+        AbilitySystemComponent-&gt;InitAbilityActorInfo(this, this); <span class="cmt">// (Owner, Avatar)</span>
+        GrantAbilities(StartingAbilities);
+    }
+}
+
+<span class="cmt">// CLIENT: called when the PlayerState replicates down</span>
+<span class="cmt">// CLIENT: được gọi khi PlayerState được replicate xuống</span>
+void ACharacterBase::OnRep_PlayerState()
+{
+    Super::OnRep_PlayerState();
+    if (AbilitySystemComponent)
+        AbilitySystemComponent-&gt;InitAbilityActorInfo(this, this);
+}</code></pre>
+<ul class="en">
+  <li><b>Owner actor</b> is who <i>owns</i> the ASC. <b>Avatar actor</b> is the physical body in the world that plays montages and gets hit. Here both are the character itself.</li>
+  <li>In bigger games (Lyra, for example) the ASC lives on the <b>PlayerState</b> so it survives death and respawn. Owner = PlayerState, Avatar = Character. You don't need that yet.</li>
+  <li>Inside abilities, <b>Get Avatar Actor from Actor Info</b> (used in <code>GA_Dash</code>) returns this Avatar.</li>
+</ul>
+<ul class="vi">
+  <li><b>Owner actor</b> là thứ <i>sở hữu</i> ASC. <b>Avatar actor</b> là cơ thể vật lý trong thế giới, thứ chạy montage và bị đánh trúng. Ở đây cả hai đều là chính nhân vật.</li>
+  <li>Trong game lớn hơn (ví dụ Lyra), ASC nằm trên <b>PlayerState</b> để nó tồn tại qua việc chết và hồi sinh. Owner = PlayerState, Avatar = Character. Bạn chưa cần điều đó.</li>
+  <li>Bên trong ability, <b>Get Avatar Actor from Actor Info</b> (dùng trong <code>GA_Dash</code>) trả về Avatar này.</li>
+</ul>
+
+<h3><span class="en">3.4 Granting abilities: <code>GrantAbilities</code></span><span class="vi">3.4 Cấp ability: <code>GrantAbilities</code></span></h3>
+<pre><code>TArray&lt;FGameplayAbilitySpecHandle&gt; ACharacterBase::GrantAbilities(TArray&lt;TSubclassOf&lt;UGameplayAbility&gt;&gt; AbilitiesToGrant)
+{
+    if (!AbilitySystemComponent || !HasAuthority()) <span class="cmt">// only the server grants abilities · chỉ server mới cấp ability</span>
+        return {};
+
+    TArray&lt;FGameplayAbilitySpecHandle&gt; AbilityHandles;
+    for (TSubclassOf&lt;UGameplayAbility&gt; Ability : AbilitiesToGrant)
+    {
+        <span class="cmt">// Spec = "this ability, at level 1, no input ID, granted by me"</span>
+        <span class="cmt">// Spec = "ability này, level 1, không có input ID, do tôi cấp"</span>
+        FGameplayAbilitySpecHandle SpecHandle =
+            AbilitySystemComponent-&gt;GiveAbility(FGameplayAbilitySpec(Ability, 1, -1, this));
+        AbilityHandles.Add(SpecHandle);
+    }
+    return AbilityHandles;
+}</code></pre>
+<div class="box tip"><b class="label"><span class="en">Key idea: an ability must be granted before it can be activated</span><span class="vi">Ý chính: ability phải được cấp thì mới kích hoạt được</span></b>
+<span class="en"><code>Try Activate Ability by Class</code> fails <i>silently</i> if the ability was never given. The list comes from the <b>StartingAbilities</b> array, which you fill in each Blueprint's <i>Class Defaults</i>. The handle returned (<code>FGameplayAbilitySpecHandle</code>) is like a receipt that <code>RemoveAbilities</code> uses later to take the ability away.</span>
+<span class="vi"><code>Try Activate Ability by Class</code> thất bại <i>trong im lặng</i> nếu ability chưa từng được cấp. Danh sách lấy từ mảng <b>StartingAbilities</b>, bạn điền nó trong <i>Class Defaults</i> của mỗi Blueprint. Handle trả về (<code>FGameplayAbilitySpecHandle</code>) giống như một tờ biên nhận, sau này <code>RemoveAbilities</code> dùng nó để thu hồi ability.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="attr"><span class="en">4. The Attribute Set: <code>UBaseAttributeSet</code></span><span class="vi">4. Attribute Set: <code>UBaseAttributeSet</code></span></h2>
+<p class="en">An attribute is a <b>float with two values</b>:</p>
+<p class="vi">Một attribute là <b>một số float có hai giá trị</b>:</p>
+<ul class="en">
+  <li><b>BaseValue</b>: the permanent value. Instant effects (damage, potions) change this.</li>
+  <li><b>CurrentValue</b>: BaseValue plus any temporary buffs from Duration/Infinite effects. This is what the UI should show.</li>
+</ul>
+<ul class="vi">
+  <li><b>BaseValue</b>: giá trị vĩnh viễn. Effect Instant (sát thương, bình máu) thay đổi giá trị này.</li>
+  <li><b>CurrentValue</b>: BaseValue cộng với các buff tạm thời từ effect Duration/Infinite. UI nên hiển thị giá trị này.</li>
+</ul>
+<p class="en">You can see both in your Blueprint: in <code>BP_SaberTooth-ASC</code>, the <b>Get MaxStamina</b> node has the pins <code>MaxStamina_BaseValue</code> and <code>MaxStamina_CurrentValue</code>.</p>
+<p class="vi">Bạn có thể thấy cả hai trong Blueprint của mình: trong <code>BP_SaberTooth-ASC</code>, node <b>Get MaxStamina</b> có hai pin <code>MaxStamina_BaseValue</code> và <code>MaxStamina_CurrentValue</code>.</p>
+
+<h3><span class="en">4.1 Declaring an attribute</span><span class="vi">4.1 Khai báo một attribute</span></h3>
+<pre><code>UPROPERTY(BlueprintReadOnly, Category = "Attributes", ReplicatedUsing = OnRep_Health)
+FGameplayAttributeData Health;
+ATTRIBUTE_ACCESSORS_BASIC(UBaseAttributeSet, Health)</code></pre>
+<p class="en"><code>ATTRIBUTE_ACCESSORS_BASIC</code> is a macro that writes four helper functions for you: <code>GetHealthAttribute()</code>, <code>GetHealth()</code>, <code>SetHealth()</code> and <code>InitHealth()</code>. These are the functions used in <code>PreAttributeChange</code> below.</p>
+<p class="vi"><code>ATTRIBUTE_ACCESSORS_BASIC</code> là một macro tự viết sẵn bốn hàm hỗ trợ: <code>GetHealthAttribute()</code>, <code>GetHealth()</code>, <code>SetHealth()</code> và <code>InitHealth()</code>. Đây chính là các hàm được dùng trong <code>PreAttributeChange</code> bên dưới.</p>
+
+<h3><span class="en">4.2 Replication (multiplayer)</span><span class="vi">4.2 Replication (multiplayer)</span></h3>
+<pre><code><span class="cmt">// .cpp: register the property for replication · đăng ký property để replicate</span>
+DOREPLIFETIME_CONDITION_NOTIFY(UBaseAttributeSet, Health, COND_None, REPNOTIFY_Always);
+
+<span class="cmt">// .h: when the new value arrives on a client, tell GAS so it can fire its delegates</span>
+<span class="cmt">// .h: khi giá trị mới tới client, báo cho GAS để nó gọi các delegate</span>
+void OnRep_Health(const FGameplayAttributeData&amp; OldValue) const
+{
+    GAMEPLAYATTRIBUTE_REPNOTIFY(UBaseAttributeSet, Health, OldValue)
+}</code></pre>
+<p class="en">This boilerplate is copy-paste for every replicated attribute. Notice that <code>Damage</code> has <b>no</b> replication. That's on purpose, see 4.4.</p>
+<p class="vi">Đoạn code mẫu này được copy-paste cho mọi attribute cần replicate. Để ý rằng <code>Damage</code> <b>không</b> được replicate. Đó là có chủ đích, xem 4.4.</p>
+
+<h3><span class="en">4.3 Clamping: two hooks with different jobs</span><span class="vi">4.3 Giới hạn giá trị (clamp): hai hook với hai nhiệm vụ khác nhau</span></h3>
+<table>
+<tr><th><span class="en">Function</span><span class="vi">Hàm</span></th><th><span class="en">When it runs</span><span class="vi">Khi nào chạy</span></th><th><span class="en">What it's for in this project</span><span class="vi">Dùng để làm gì trong dự án</span></th></tr>
+<tr><td><code>PreAttributeChange</code></td><td><span class="en">Before <b>any</b> change to the CurrentValue, including temporary buffs</span><span class="vi">Trước <b>mọi</b> thay đổi lên CurrentValue, kể cả buff tạm thời</span></td><td><span class="en">Clamp Health to 0&hellip;MaxHealth. Keep MaxHealth &ge; 1, and if MaxHealth drops below Health, lower Health too.</span><span class="vi">Giới hạn Health trong 0&hellip;MaxHealth. Giữ MaxHealth &ge; 1, và nếu MaxHealth tụt xuống dưới Health thì hạ Health theo.</span></td></tr>
+<tr><td><code>PostGameplayEffectExecute</code></td><td><span class="en">After an <b>Instant</b> (or periodic) effect changes the <b>BaseValue</b></span><span class="vi">Sau khi một effect <b>Instant</b> (hoặc periodic) thay đổi <b>BaseValue</b></span></td><td><span class="en">Clamp Health and Stamina again so the BaseValue never goes negative or above max.</span><span class="vi">Clamp lại Health và Stamina để BaseValue không bao giờ âm hoặc vượt mức tối đa.</span></td></tr>
+</table>
+<pre><code>void UBaseAttributeSet::PostGameplayEffectExecute(const FGameplayEffectModCallbackData&amp; Data)
+{
+    Super::PostGameplayEffectExecute(Data);
+    if (Data.EvaluatedData.Attribute == GetHealthAttribute())
+        SetHealth(FMath::Clamp(GetHealth(), 0.f, GetMaxHealth()));
+    else if (Data.EvaluatedData.Attribute == GetStaminaAttribute())
+        SetStamina(FMath::Clamp(GetStamina(), 0.f, GetMaxStamina()));
+}</code></pre>
+<div class="box warn"><b class="label"><span class="en">Common gotcha</span><span class="vi">Lỗi hay gặp</span></b>
+<span class="en"><code>PreAttributeChange</code> only clamps the <i>CurrentValue</i>, not the BaseValue. That's why both hooks are needed. Your commit <code>7311011 "Clamp health value"</code> is exactly this lesson.</span>
+<span class="vi"><code>PreAttributeChange</code> chỉ clamp <i>CurrentValue</i>, không clamp BaseValue. Đó là lý do cần cả hai hook. Commit <code>7311011 "Clamp health value"</code> của bạn chính là bài học này.</span></div>
+
+<h3><span class="en">4.4 Meta attributes: <code>Damage</code></span><span class="vi">4.4 Meta attribute: <code>Damage</code></span></h3>
+<p class="en"><code>Damage</code> is a <b>meta attribute</b>: a temporary "inbox" value, not real character state. The standard pattern works like this:</p>
+<p class="vi"><code>Damage</code> là một <b>meta attribute</b>: một giá trị "hộp thư đến" tạm thời, không phải trạng thái thật của nhân vật. Mẫu chuẩn hoạt động như sau:</p>
+<ol class="en">
+  <li>A damage GE adds, say, 20 to the target's <code>Damage</code> instead of subtracting from <code>Health</code>.</li>
+  <li>In <code>PostGameplayEffectExecute</code> you read Damage, reset it to 0 and subtract it from Health. This is the place to apply armour, resistances, crits, hit reactions and death checks.</li>
+</ol>
+<ol class="vi">
+  <li>GE sát thương cộng, ví dụ, 20 vào <code>Damage</code> của mục tiêu thay vì trừ thẳng vào <code>Health</code>.</li>
+  <li>Trong <code>PostGameplayEffectExecute</code> bạn đọc Damage, đặt nó về 0 và trừ vào Health. Đây là nơi để tính giáp, kháng, chí mạng, phản ứng khi trúng đòn và kiểm tra chết.</li>
+</ol>
+<pre><code><span class="cmt">// The meta-attribute pattern (not in your code yet; a good exercise)</span>
+<span class="cmt">// Mẫu meta attribute (chưa có trong code của bạn; một bài tập tốt)</span>
+if (Data.EvaluatedData.Attribute == GetDamageAttribute())
+{
+    const float LocalDamage = GetDamage();
+    SetDamage(0.f);
+    if (LocalDamage &gt; 0.f)
+    {
+        SetHealth(FMath::Clamp(GetHealth() - LocalDamage, 0.f, GetMaxHealth()));
+        <span class="cmt">// if (GetHealth() &lt;= 0) -&gt; send an event / apply GE_Death · gửi event / áp GE_Death</span>
+    }
+}</code></pre>
+<div class="box warn"><span class="en">Right now <code>Damage</code> is declared but <code>PostGameplayEffectExecute</code> doesn't handle it. Any GE that modifies <code>Damage</code> therefore has no visible result. Check which attribute <code>GE_Claw&#272;amage</code> / <code>GE_FistDamage</code> modify. If it's Health, they work, but they skip the meta-attribute step.</span>
+<span class="vi">Hiện tại <code>Damage</code> đã được khai báo nhưng <code>PostGameplayEffectExecute</code> chưa xử lý nó. Vì vậy GE nào thay đổi <code>Damage</code> sẽ không có kết quả nhìn thấy được. Hãy kiểm tra <code>GE_Claw&#272;amage</code> / <code>GE_FistDamage</code> đang thay đổi attribute nào. Nếu là Health thì chúng vẫn hoạt động, nhưng bỏ qua bước meta attribute.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="tags">5. Gameplay Tags</h2>
+<p class="en">Tags are hierarchical names. <code>Status.Health.Regen</code> is a <i>child</i> of <code>Status.Health</code>, which is a child of <code>Status</code>. A query for "has <code>Status</code>" matches all of them unless you ask for an <b>exact</b> match. (That's what the <code>OnlyMatchExact</code> pin on <i>Wait Gameplay Event</i> controls.)</p>
+<p class="vi">Tag là tên có phân cấp. <code>Status.Health.Regen</code> là <i>con</i> của <code>Status.Health</code>, và tag đó lại là con của <code>Status</code>. Một truy vấn "có <code>Status</code>" sẽ khớp với tất cả, trừ khi bạn yêu cầu khớp <b>chính xác</b>. (Đó là việc của pin <code>OnlyMatchExact</code> trên <i>Wait Gameplay Event</i>.)</p>
+<table>
+<tr><th><span class="en">Tag in this project</span><span class="vi">Tag trong dự án</span></th><th><span class="en">Family</span><span class="vi">Nhóm</span></th><th><span class="en">Used by</span><span class="vi">Được dùng bởi</span></th></tr>
+<tr><td><code>Cooldown.Dash</code></td><td>Cooldown</td><td><span class="en">Granted by <code>GE_Dash_Cooldown</code>. While the ASC has it, GA_Dash cannot activate.</span><span class="vi">Được cấp bởi <code>GE_Dash_Cooldown</code>. Khi ASC còn tag này, GA_Dash không thể kích hoạt.</span></td></tr>
+<tr><td><code>Status.Stamina.Regen</code>, <code>Status.Health.Regen</code></td><td>Status</td><td><span class="en">Granted by the regen GEs. <i>Remove Active Effects with Granted Tags</i> uses them to stop regen.</span><span class="vi">Được cấp bởi các GE hồi phục. <i>Remove Active Effects with Granted Tags</i> dùng chúng để dừng hồi phục.</span></td></tr>
+<tr><td><code>State.Death</code> / <code>Status.Death</code></td><td>State</td><td><span class="en">Death. <i>Wait Gameplay Tag Add to Actor (State.Death)</i> listens for it. (You have two similar tags, so pick one.)</span><span class="vi">Cái chết. <i>Wait Gameplay Tag Add to Actor (State.Death)</i> lắng nghe tag này. (Bạn đang có hai tag gần giống nhau, hãy chọn một.)</span></td></tr>
+<tr><td><code>Event.Montage.Claw</code>, <code>Event.Montage.ComboPunch</code></td><td>Event</td><td><span class="en">Sent by a hitbox overlap and received by the attack ability (<a href="#events">section 8</a>)</span><span class="vi">Được gửi khi hitbox overlap và được ability tấn công nhận (<a href="#events">mục 8</a>)</span></td></tr>
+<tr><td><code>Event.Ability.Changed</code></td><td>Event</td><td><span class="en">Sent on BeginPlay to tell the ability UI to refresh</span><span class="vi">Được gửi lúc BeginPlay để báo UI ability làm mới</span></td></tr>
+<tr><td><code>Event.HitScan.Start</code> / <code>.End</code></td><td>Event</td><td><span class="en">Hit-scan window for the NPC</span><span class="vi">Khoảng thời gian hit-scan của NPC</span></td></tr>
+<tr><td><code>Data.Damage.DamageOvertime</code></td><td>Data (SetByCaller)</td><td><span class="en">Key that passes a damage number into <code>GE_DamageOvertime</code> (<a href="#ge-burn">7.1</a>)</span><span class="vi">Khóa dùng để truyền con số sát thương vào <code>GE_DamageOvertime</code> (<a href="#ge-burn">7.1</a>)</span></td></tr>
+<tr><td><code>GameplayCue.Movement.Dash</code></td><td>GameplayCue</td><td><span class="en">Fires <code>GC_Dash</code>. Cue tags <b>must</b> start with <code>GameplayCue.</code></span><span class="vi">Kích hoạt <code>GC_Dash</code>. Tag của cue <b>bắt buộc</b> bắt đầu bằng <code>GameplayCue.</code></span></td></tr>
+<tr><td><code>GameplayAbilities.MeleeAttack.PunchCombo</code></td><td>Ability</td><td><span class="en">Identifies the NPC punch ability</span><span class="vi">Định danh ability đấm của NPC</span></td></tr>
+<tr><td><code>Effect.HitReaction</code></td><td>Effect</td><td><span class="en">Hit reaction</span><span class="vi">Phản ứng khi trúng đòn</span></td></tr>
+</table>
+<div class="box tip"><b class="label"><span class="en">Naming convention</span><span class="vi">Quy ước đặt tên</span></b>
+<span class="en">Use a small set of top-level families and stick to them: <code>Ability.*</code>, <code>Cooldown.*</code>, <code>State.*</code>, <code>Event.*</code>, <code>Data.*</code>, <code>GameplayCue.*</code>. Avoid characters like <code>?</code> in tag names (<code>Gameplay.Attack.UsingClaw?</code>). They're legal, but they're hard to type in C++ and easy to typo.</span>
+<span class="vi">Dùng một số ít nhóm gốc và giữ nhất quán: <code>Ability.*</code>, <code>Cooldown.*</code>, <code>State.*</code>, <code>Event.*</code>, <code>Data.*</code>, <code>GameplayCue.*</code>. Tránh ký tự như <code>?</code> trong tên tag (<code>Gameplay.Attack.UsingClaw?</code>). Chúng hợp lệ, nhưng khó gõ trong C++ và dễ gõ sai.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="ga">6. Gameplay Abilities</h2>
+<p class="en">A Gameplay Ability is a Blueprint (or C++ class) with a fixed lifecycle:</p>
+<p class="vi">Gameplay Ability là một Blueprint (hoặc class C++) có vòng đời cố định:</p>
+<div class="flow">
+  <div class="step">CanActivate?<small class="en">tags, cooldown, cost</small><small class="vi">tag, cooldown, cost</small></div><span class="arrow">&rarr;</span>
+  <div class="step">Event ActivateAbility</div><span class="arrow">&rarr;</span>
+  <div class="step">Commit<small class="en">pay cost + start cooldown</small><small class="vi">trả cost + bắt đầu cooldown</small></div><span class="arrow">&rarr;</span>
+  <div class="step">Ability Tasks<small class="en">wait for montage, events, timers&hellip;</small><small class="vi">chờ montage, event, timer&hellip;</small></div><span class="arrow">&rarr;</span>
+  <div class="step">End Ability<small class="en">always!</small><small class="vi">luôn luôn!</small></div>
+</div>
+<div class="box bad"><b class="label"><span class="en">Rule #1: always call End Ability</span><span class="vi">Quy tắc số 1: luôn gọi End Ability</span></b>
+<span class="en">If an ability never ends, it stays "active" forever. With default settings it then cannot be activated again, and the tags it added are never removed. Every output path (completed, interrupted, cancelled) should eventually reach <b>End Ability</b>.</span>
+<span class="vi">Nếu ability không bao giờ kết thúc, nó sẽ "đang chạy" mãi mãi. Với thiết lập mặc định, nó sẽ không thể kích hoạt lại, và các tag nó thêm vào không bao giờ bị gỡ. Mọi nhánh đầu ra (completed, interrupted, cancelled) cuối cùng đều phải tới <b>End Ability</b>.</span></div>
+
+<h3><span class="en">Important Class Defaults on every GA</span><span class="vi">Các Class Defaults quan trọng trên mọi GA</span></h3>
+<table>
+<tr><th><span class="en">Setting</span><span class="vi">Thiết lập</span></th><th><span class="en">Meaning</span><span class="vi">Ý nghĩa</span></th></tr>
+<tr><td><b>Instancing Policy</b></td><td><span class="en"><i>Instanced Per Actor</i> (the usual choice) keeps one copy of the ability per character, so variables persist.</span><span class="vi"><i>Instanced Per Actor</i> (lựa chọn thông dụng) giữ một bản ability cho mỗi nhân vật, nên biến được giữ lại giữa các lần dùng.</span></td></tr>
+<tr><td><b>Cost Gameplay Effect Class</b></td><td><span class="en">GE that removes the resource (GA_Dash &rarr; <code>GE_Dash_Cost</code>)</span><span class="vi">GE trừ tài nguyên (GA_Dash &rarr; <code>GE_Dash_Cost</code>)</span></td></tr>
+<tr><td><b>Cooldown Gameplay Effect Class</b></td><td><span class="en">GE that grants a cooldown tag for X seconds (GA_Dash &rarr; <code>GE_Dash_Cooldown</code>)</span><span class="vi">GE cấp tag cooldown trong X giây (GA_Dash &rarr; <code>GE_Dash_Cooldown</code>)</span></td></tr>
+<tr><td><b>Ability Tags</b></td><td><span class="en">Tags that describe this ability (used by "Try Activate by Tag" and by block/cancel lists)</span><span class="vi">Tag mô tả ability này (dùng cho "Try Activate by Tag" và các danh sách block/cancel)</span></td></tr>
+<tr><td><b>Activation Owned Tags</b></td><td><span class="en">Tags added to the owner <i>while</i> the ability is active, for example <code>State.Attacking</code></span><span class="vi">Tag được thêm vào owner <i>trong lúc</i> ability đang chạy, ví dụ <code>State.Attacking</code></span></td></tr>
+<tr><td><b>Activation Blocked Tags</b></td><td><span class="en">Can't activate if the owner has these, for example <code>State.Death</code></span><span class="vi">Không thể kích hoạt nếu owner có các tag này, ví dụ <code>State.Death</code></span></td></tr>
+<tr><td><b>Cancel / Block Abilities with Tag</b></td><td><span class="en">Cancel or block <i>other</i> abilities when this one starts</span><span class="vi">Hủy hoặc chặn các ability <i>khác</i> khi ability này bắt đầu</span></td></tr>
+</table>
+
+<h3 id="ga-dash"><span class="en">6.1 <code>GA_Dash</code>: cost, root motion, cooldown and a cue</span><span class="vi">6.1 <code>GA_Dash</code>: cost, root motion, cooldown và cue</span></h3>
+<div class="flow">
+  <div class="step">Event ActivateAbility</div><span class="arrow">&rarr;</span>
+  <div class="step">CommitAbilityCost<small class="en">applies GE_Dash_Cost (stamina)</small><small class="vi">áp dụng GE_Dash_Cost (stamina)</small></div><span class="arrow">&rarr;</span>
+  <div class="step">Apply Root Motion Constant Force<small>Direction = GetDashDirection<br>Strength 2000, Duration 0.5 s<br>ClampVelocityOnFinish = GetMaxSpeed</small></div><span class="arrow">&rarr; then &rarr;</span>
+  <div class="step">Add GameplayCue To Owner<small>GameplayCue.Movement.Dash<br>Remove on ability end</small></div>
+</div>
+<div class="flow">
+  <div class="step">OnFinish <span class="en">(force done)</span><span class="vi">(lực kết thúc)</span></div><span class="arrow">&rarr;</span>
+  <div class="step">CommitAbilityCooldown<small class="en">applies GE_Dash_Cooldown &rarr; Cooldown.Dash tag</small><small class="vi">áp dụng GE_Dash_Cooldown &rarr; tag Cooldown.Dash</small></div><span class="arrow">&rarr;</span>
+  <div class="step">End Ability</div>
+</div>
+<p><b><span class="en">What it teaches:</span><span class="vi">Bài học rút ra:</span></b></p>
+<ul class="en">
+  <li><b>Cost and cooldown are separate commits.</b> You pay stamina at the start but start the cooldown only after the dash ends. <i>CommitAbility</i> would do both at once.</li>
+  <li><b>Ability Tasks</b> (the nodes with a clock icon and several exec outputs) are "latent". The <code>then</code> pin fires immediately, and <code>OnFinish</code> fires later. That's why the cue is on <code>then</code> and End Ability is on <code>OnFinish</code>.</li>
+  <li><b>Root Motion Sources</b> move the character in a network-safe way. That's better than <i>Launch Character</i> or setting the location directly.</li>
+  <li><b>Helper functions</b>: <code>GetDashDirection</code> uses <i>Get Last Movement Input Vector</i>, and falls back to the actor's forward vector when there's no input. <code>GetMaxSpeed</code> reads the movement component, with a fallback of 500.</li>
+</ul>
+<ul class="vi">
+  <li><b>Cost và cooldown là hai lần commit riêng.</b> Bạn trả stamina ngay từ đầu nhưng chỉ bắt đầu cooldown sau khi cú lướt kết thúc. <i>CommitAbility</i> sẽ làm cả hai cùng lúc.</li>
+  <li><b>Ability Task</b> (các node có biểu tượng đồng hồ và nhiều chân exec ra) là node "latent" (chạy trễ). Pin <code>then</code> chạy ngay lập tức, còn <code>OnFinish</code> chạy sau. Đó là lý do cue nằm ở <code>then</code> còn End Ability nằm ở <code>OnFinish</code>.</li>
+  <li><b>Root Motion Source</b> di chuyển nhân vật theo cách an toàn cho mạng. Tốt hơn <i>Launch Character</i> hay đặt vị trí trực tiếp.</li>
+  <li><b>Hàm hỗ trợ</b>: <code>GetDashDirection</code> dùng <i>Get Last Movement Input Vector</i>, và quay về hướng forward của actor khi không có input. <code>GetMaxSpeed</code> đọc từ movement component, giá trị dự phòng là 500.</li>
+</ul>
+<div class="box warn"><span class="en"><code>CommitAbilityCost</code> returns a bool, and that output isn't connected. If you don't have enough stamina, the dash still happens. The usual fix is a <b>Branch</b>: if it returns false, call <b>End Ability</b> straight away. (GAS also checks the cost <i>before</i> activation when the Cost GE is set in Class Defaults, so this is a safety net.)</span>
+<span class="vi"><code>CommitAbilityCost</code> trả về một bool, và đầu ra đó chưa được nối. Nếu không đủ stamina, cú lướt vẫn xảy ra. Cách sửa thông thường là dùng <b>Branch</b>: nếu trả về false thì gọi <b>End Ability</b> ngay. (GAS cũng kiểm tra cost <i>trước</i> khi kích hoạt nếu Cost GE được đặt trong Class Defaults, nên đây là lớp bảo vệ thêm.)</span></div>
+
+<h3 id="ga-claw"><span class="en">6.2 <code>GA_ClawAttack</code>: montage plus an event-driven hit</span><span class="vi">6.2 <code>GA_ClawAttack</code>: montage cùng đòn đánh dựa trên event</span></h3>
+<div class="flow">
+  <div class="step">Event ActivateAbility</div><span class="arrow">&rarr;</span>
+  <div class="step">PlayMontageAndWait<small>Anim_SteampunkCat_Attack_Claw_Montage<br>Stop when ability ends = true</small></div><span class="arrow">&rarr; then &rarr;</span>
+  <div class="step">Wait Gameplay Event<small>Event.Montage.Claw<br>Only trigger once</small></div><span class="arrow">&rarr; EventReceived &rarr;</span>
+  <div class="step">Break Gameplay Event Data<small class="en">take TargetData</small><small class="vi">lấy TargetData</small></div><span class="arrow">&rarr;</span>
+  <div class="step">ApplyGameplayEffectToTarget<small>GE_Claw&#272;amage</small></div>
+</div>
+<div class="flow">
+  <div class="step">Montage OnCompleted</div><span class="arrow">&rarr;</span><div class="step">End Ability</div>
+</div>
+<p><b><span class="en">What it teaches:</span><span class="vi">Bài học rút ra:</span></b></p>
+<ul class="en">
+  <li>The ability doesn't know <i>who</i> it will hit. It plays the animation and <b>waits</b> for someone to say "I hit X" through a <b>Gameplay Event</b>. The hit detection is completely decoupled from the ability (see <a href="#events">section 8</a>).</li>
+  <li><b>Target Data</b> is GAS's standard way to carry "who and where was hit" through the system.</li>
+  <li>The ability applies a GE to the target. It never edits the target's Health directly. <b>Only Gameplay Effects should change attributes.</b></li>
+</ul>
+<ul class="vi">
+  <li>Ability không biết nó sẽ đánh trúng <i>ai</i>. Nó chạy animation và <b>chờ</b> ai đó báo "tôi đã trúng X" thông qua một <b>Gameplay Event</b>. Việc phát hiện va chạm hoàn toàn tách rời khỏi ability (xem <a href="#events">mục 8</a>).</li>
+  <li><b>Target Data</b> là cách chuẩn của GAS để truyền thông tin "ai bị trúng, ở đâu" qua hệ thống.</li>
+  <li>Ability áp dụng GE lên mục tiêu. Nó không bao giờ sửa trực tiếp Health của mục tiêu. <b>Chỉ Gameplay Effect mới nên thay đổi attribute.</b></li>
+</ul>
+<div class="box warn"><span class="en">Only <code>OnCompleted</code> leads to End Ability. If the montage is <b>interrupted</b> (for example you get hit or you dash), the ability never ends. Connect <code>OnInterrupted</code>, <code>OnCancelled</code> and <code>OnBlendOut</code> to End Ability too. The ability also never calls <b>Commit</b>, so the claw has no cost or cooldown. That's a good exercise: add a <code>GE_Claw_Cooldown</code>.</span>
+<span class="vi">Chỉ có <code>OnCompleted</code> dẫn tới End Ability. Nếu montage bị <b>ngắt</b> (ví dụ bạn bị đánh hoặc bạn lướt), ability sẽ không bao giờ kết thúc. Hãy nối cả <code>OnInterrupted</code>, <code>OnCancelled</code> và <code>OnBlendOut</code> tới End Ability. Ability này cũng không gọi <b>Commit</b>, nên đòn cào không có cost hay cooldown. Đây là bài tập tốt: thêm một <code>GE_Claw_Cooldown</code>.</span></div>
+
+<h3 id="ga-death"><span class="en">6.3 <code>GA_Death</code>: the smallest possible ability</span><span class="vi">6.3 <code>GA_Death</code>: ability nhỏ nhất có thể</span></h3>
+<div class="flow">
+  <div class="step">Event ActivateAbility</div><span class="arrow">&rarr;</span>
+  <div class="step">ApplyGameplayEffectToOwner<small>GE_Death</small></div><span class="arrow">&rarr;</span>
+  <div class="step">End Ability</div>
+</div>
+<p class="en">This shows that an ability can be nothing more than "apply an effect to myself". <code>GE_Death</code> grants the death tag. Then anything listening with <b>Wait Gameplay Tag Add to Actor (State.Death)</b> reacts: ragdoll, UI, the spawner and so on. With tags, the death ability doesn't need to know about any of those systems.</p>
+<p class="vi">Ví dụ này cho thấy một ability có thể chỉ đơn giản là "áp một effect lên chính mình". <code>GE_Death</code> cấp tag chết. Sau đó bất cứ thứ gì đang lắng nghe bằng <b>Wait Gameplay Tag Add to Actor (State.Death)</b> sẽ phản ứng: ragdoll, UI, bộ spawn, v.v. Nhờ tag, ability chết không cần biết gì về các hệ thống đó.</p>
+
+<h3><span class="en">6.4 <code>GA_MeleeAttack_Punch</code> (NPC)</span><span class="vi">6.4 <code>GA_MeleeAttack_Punch</code> (NPC)</span></h3>
+<p class="en">This is the same pattern as the claw, used by the enemy. <code>BP_EnemyNPC</code>'s <code>SphereHand_R</code> overlap sends <code>Event.Montage.ComboPunch</code>, the punch ability waits for it and then applies <code>GE_FistDamage</code>. Once you understand the claw, you understand the punch.</p>
+<p class="vi">Đây là cùng một mẫu với đòn cào, nhưng dành cho kẻ địch. Khi <code>SphereHand_R</code> của <code>BP_EnemyNPC</code> overlap, nó gửi <code>Event.Montage.ComboPunch</code>, ability đấm chờ event này rồi áp dụng <code>GE_FistDamage</code>. Hiểu đòn cào là hiểu đòn đấm.</p>
+
+<!-- ============================================================ -->
+<h2 id="ge">7. Gameplay Effects</h2>
+<p class="en">A Gameplay Effect is a <b>data-only</b> Blueprint. You don't write logic in it. You fill in a form. The three duration types are the most important thing to learn:</p>
+<p class="vi">Gameplay Effect là một Blueprint <b>chỉ chứa dữ liệu</b>. Bạn không viết logic trong đó, mà chỉ điền vào một biểu mẫu. Ba loại thời lượng là điều quan trọng nhất cần học:</p>
+<table>
+<tr><th>Duration policy</th><th><span class="en">Changes</span><span class="vi">Thay đổi gì</span></th><th><span class="en">Examples in this project</span><span class="vi">Ví dụ trong dự án</span></th></tr>
+<tr><td><b>Instant</b></td><td><span class="en">BaseValue, permanently, once</span><span class="vi">BaseValue, vĩnh viễn, một lần</span></td><td><code>GE_Dash_Cost</code> (&minus;stamina), <code>GE_Claw&#272;amage</code>, <code>GE_FistDamage</code></td></tr>
+<tr><td><b>Has Duration</b></td><td><span class="en">CurrentValue, plus tags, for N seconds. Can be <b>periodic</b>.</span><span class="vi">CurrentValue và tag, trong N giây. Có thể là <b>periodic</b> (lặp theo chu kỳ).</span></td><td><span class="en"><code>GE_Dash_Cooldown</code> (grants <code>Cooldown.Dash</code> for N s), <code>GE_DamageOvertime</code></span><span class="vi"><code>GE_Dash_Cooldown</code> (cấp <code>Cooldown.Dash</code> trong N giây), <code>GE_DamageOvertime</code></span></td></tr>
+<tr><td><b>Infinite</b></td><td><span class="en">Until removed. Can be periodic.</span><span class="vi">Đến khi bị gỡ bỏ. Có thể là periodic.</span></td><td><span class="en"><code>GE_StaminaRegen</code>, <code>GE_HealthRegen</code> (periodic +X until removed), <code>GE_Death</code></span><span class="vi"><code>GE_StaminaRegen</code>, <code>GE_HealthRegen</code> (periodic +X đến khi bị gỡ), <code>GE_Death</code></span></td></tr>
+</table>
+<div class="box tip"><b class="label"><span class="en">Periodic effects behave like Instant ones</span><span class="vi">Effect periodic hoạt động giống effect Instant</span></b>
+<span class="en">A Duration or Infinite effect with a <b>Period</b> (for example every 0.1 s) applies its modifier to the <i>BaseValue</i> on every tick, just like an Instant effect repeated over time. That's how regen and damage-over-time work. They also trigger <code>PostGameplayEffectExecute</code> each tick.</span>
+<span class="vi">Một effect Duration hoặc Infinite có <b>Period</b> (ví dụ mỗi 0.1 giây) áp modifier lên <i>BaseValue</i> ở mỗi lần tick, giống một effect Instant lặp lại theo thời gian. Đó là cách hồi phục và sát thương theo thời gian hoạt động. Chúng cũng kích hoạt <code>PostGameplayEffectExecute</code> mỗi lần tick.</span></div>
+<p class="en">Other important GE fields, which in UE 5.3+ are set through <b>GE Components</b>:</p>
+<p class="vi">Các trường quan trọng khác của GE, từ UE 5.3 trở đi được thiết lập qua <b>GE Component</b>:</p>
+<ul class="en">
+  <li><b>Modifiers</b>: Attribute + Operation (Add / Multiply / Override) + Magnitude.</li>
+  <li><b>Magnitude types</b>: Scalable Float (a fixed number or a curve by level), <b>Set By Caller</b> (number passed in at runtime), Attribute Based, Custom Calculation.</li>
+  <li><b>Grant Tags to Target Actor</b> component: adds tags while the effect is active (cooldowns, states).</li>
+  <li><b>Stacking</b>: what happens if the same GE is applied twice.</li>
+  <li><b>Gameplay Cues</b>: a GE can trigger cues automatically.</li>
+</ul>
+<ul class="vi">
+  <li><b>Modifier</b>: Attribute + Operation (Add / Multiply / Override) + Magnitude.</li>
+  <li><b>Kiểu Magnitude</b>: Scalable Float (số cố định hoặc curve theo level), <b>Set By Caller</b> (con số được truyền vào lúc chạy), Attribute Based, Custom Calculation.</li>
+  <li>Component <b>Grant Tags to Target Actor</b>: thêm tag trong lúc effect còn hiệu lực (cooldown, trạng thái).</li>
+  <li><b>Stacking</b>: chuyện gì xảy ra khi cùng một GE được áp hai lần.</li>
+  <li><b>Gameplay Cue</b>: một GE có thể tự động kích hoạt cue.</li>
+</ul>
+
+<h3 id="ge-burn"><span class="en">7.1 Example: <code>BP_EffectArea_Burning</code> with Set By Caller</span><span class="vi">7.1 Ví dụ: <code>BP_EffectArea_Burning</code> với Set By Caller</span></h3>
+<p class="en">This actor is a fire zone. It's the best example in the project of applying an effect <i>from outside an ability</i>.</p>
+<p class="vi">Actor này là một vùng lửa. Đây là ví dụ tốt nhất trong dự án về việc áp dụng effect <i>từ bên ngoài ability</i>.</p>
+<div class="flow">
+  <div class="step">Event ActorBeginOverlap</div><span class="arrow">&rarr;</span>
+  <div class="step">Get Ability System Component<small class="en">(OtherActor), via the interface</small><small class="vi">(OtherActor), thông qua interface</small></div><span class="arrow">&rarr;</span>
+  <div class="step">Is Valid?</div><span class="arrow">&rarr;</span>
+  <div class="step">Make Spec Handle (By Class)<small>GE_DamageOvertime, Causer = self</small></div><span class="arrow">&rarr;</span>
+  <div class="step">Assign Tag Set by Caller Magnitude<small>Data.Damage.DamageOvertime = &minus;0.5</small></div><span class="arrow">&rarr;</span>
+  <div class="step">ApplyGameplayEffectSpecToSelf<small class="en">(on the victim's ASC)</small><small class="vi">(trên ASC của nạn nhân)</small></div>
+</div>
+<div class="flow">
+  <div class="step">Event ActorEndOverlap</div><span class="arrow">&rarr;</span>
+  <div class="step">Remove Active Gameplay Effect by Source Effect<small>GE_DamageOvertime</small></div>
+</div>
+<ul class="en">
+  <li><b>Spec</b> = a GE <i>class</i> plus runtime data (level, causer, SetByCaller values). The class is the recipe and the spec is the dish you're about to serve.</li>
+  <li><b>Set By Caller</b> lets <i>one</i> GE asset deal different damage amounts. The GE's modifier says "magnitude = SetByCaller (Data.Damage.DamageOvertime)", and the caller fills in the number.</li>
+  <li>An actor that isn't a GAS character (a fire zone) can still affect GAS characters. All it needs is to find their ASC.</li>
+</ul>
+<ul class="vi">
+  <li><b>Spec</b> = một <i>class</i> GE cộng dữ liệu lúc chạy (level, causer, giá trị SetByCaller). Class là công thức nấu ăn, còn spec là món ăn sắp được dọn ra.</li>
+  <li><b>Set By Caller</b> cho phép <i>một</i> asset GE gây nhiều mức sát thương khác nhau. Modifier của GE ghi "magnitude = SetByCaller (Data.Damage.DamageOvertime)", và bên gọi sẽ điền con số vào.</li>
+  <li>Một actor không phải nhân vật GAS (vùng lửa) vẫn có thể tác động lên nhân vật GAS. Nó chỉ cần tìm được ASC của họ.</li>
+</ul>
+
+<h3 id="ge-regen"><span class="en">7.2 Example: regen controlled by attribute changes (<code>BP_SaberTooth-ASC</code>)</span><span class="vi">7.2 Ví dụ: hồi phục điều khiển bởi thay đổi attribute (<code>BP_SaberTooth-ASC</code>)</span></h3>
+<div class="flow">
+  <div class="step">BeginPlay</div><span class="arrow">&rarr;</span>
+  <div class="step">Wait for Attribute Changed<small class="en">Stamina (and a second one for Health)</small><small class="vi">Stamina (và một node thứ hai cho Health)</small></div><span class="arrow">&rarr; Changed &rarr;</span>
+  <div class="step">HandleStaminaChanged(New, Old)</div>
+</div>
+<p class="en"><b>HandleStaminaChanged</b> logic (Health is identical with <code>Status.Health.Regen</code>):</p>
+<p class="vi">Logic của <b>HandleStaminaChanged</b> (Health giống hệt, dùng <code>Status.Health.Regen</code>):</p>
+<ul class="en">
+  <li><b>If New &lt; Old</b> (stamina was just spent): remove effects with <code>Status.Stamina.Regen</code>, <b>Delay 0.1 s</b>, then apply <code>GE_StaminaRegen</code> again. This <i>restarts</i> the regen.</li>
+  <li><b>Else, if stamina &ge; MaxStamina</b> (full): remove the regen effect so it stops ticking.</li>
+</ul>
+<ul class="vi">
+  <li><b>Nếu New &lt; Old</b> (vừa tiêu stamina): gỡ các effect có <code>Status.Stamina.Regen</code>, <b>Delay 0.1 giây</b>, rồi áp lại <code>GE_StaminaRegen</code>. Việc này <i>khởi động lại</i> quá trình hồi phục.</li>
+  <li><b>Ngược lại, nếu stamina &ge; MaxStamina</b> (đã đầy): gỡ effect hồi phục để nó ngừng tick.</li>
+</ul>
+<p class="en"><b>What it teaches:</b> <i>Wait for Attribute Changed</i> is the Blueprint way to react to attributes. You also learn how to <b>find and remove effects by the tag they grant</b>. You never had to store a handle to the regen effect.</p>
+<p class="vi"><b>Bài học rút ra:</b> <i>Wait for Attribute Changed</i> là cách trong Blueprint để phản ứng với attribute. Bạn cũng học được cách <b>tìm và gỡ effect theo tag mà chúng cấp</b>. Bạn không cần phải lưu handle của effect hồi phục.</p>
+
+<!-- ============================================================ -->
+<h2 id="events"><span class="en">8. Gameplay Events + Anim Notify States: how the claw actually hits</span><span class="vi">8. Gameplay Event + Anim Notify State: đòn cào thực sự trúng như thế nào</span></h2>
+<p class="en">This is the full chain from key press to health bar. It's the most important diagram in this guide:</p>
+<p class="vi">Đây là toàn bộ chuỗi từ lúc nhấn phím đến thanh máu. Đây là sơ đồ quan trọng nhất trong tài liệu:</p>
+<div class="flow">
+  <div class="step"><span class="en">Press <b>E</b></span><span class="vi">Nhấn <b>E</b></span><small>IA_Attack (IMC_Sabertooth)</small></div><span class="arrow">&rarr;</span>
+  <div class="step">BP_SaberTooth-ASC<small>Stop Movement Immediately<br>&rarr; Try Activate Ability by Class (GA_ClawAttack)</small></div><span class="arrow">&rarr;</span>
+  <div class="step">GA_ClawAttack<small>PlayMontageAndWait + Wait Gameplay Event</small></div><span class="arrow">&rarr;</span>
+  <div class="step"><span class="en">Montage reaches <b>ANS_ClawAttack</b></span><span class="vi">Montage chạy tới <b>ANS_ClawAttack</b></span><small>NotifyBegin: Get Claw Hitbox (BPI_ClawHitbox)<br>&rarr; Set Collision Enabled = QueryOnly</small></div>
+</div>
+<div class="flow">
+  <span class="arrow">&rarr;</span>
+  <div class="step"><span class="en">SphereClaw overlaps an enemy</span><span class="vi">SphereClaw chạm vào kẻ địch</span><small>On Component Begin Overlap (SphereClaw)<br>Other &ne; Self?</small></div><span class="arrow">&rarr;</span>
+  <div class="step">Send Gameplay Event to Actor<small>Actor = self, Tag = Event.Montage.Claw<br>Payload.TargetData = Ability Target Data from Actor(Other)</small></div><span class="arrow">&rarr;</span>
+  <div class="step"><span class="en">GA wakes up</span><span class="vi">GA "thức dậy"</span><small>EventReceived &rarr; ApplyGameplayEffectToTarget(GE_Claw&#272;amage)</small></div><span class="arrow">&rarr;</span>
+  <div class="step"><span class="en">Enemy Health &darr;</span><span class="vi">Health kẻ địch &darr;</span><small class="en">PostGameplayEffectExecute clamps &rarr; life bar updates</small><small class="vi">PostGameplayEffectExecute clamp &rarr; thanh máu cập nhật</small></div>
+</div>
+<ul class="en">
+  <li><b>Anim Notify State</b> (<code>ANS_ClawAttack</code>) is a bar on the montage timeline with a Begin and an End. Animators can drag it to decide exactly which frames can hit. As an artist, this is where <i>you</i> control the gameplay timing.</li>
+  <li><b>Blueprint Interface</b> (<code>BPI_ClawHitbox</code>): the notify asks "give me your claw hitbox" without knowing the character's class. The same notify works on any character that implements the interface.</li>
+  <li><b>Send Gameplay Event to Actor</b> is sent to <b>self</b> (the attacker), because the <i>attacker's</i> ability is the one waiting. The <i>victim</i> travels inside the payload as Target Data.</li>
+</ul>
+<ul class="vi">
+  <li><b>Anim Notify State</b> (<code>ANS_ClawAttack</code>) là một thanh trên timeline của montage, có Begin và End. Animator có thể kéo nó để quyết định chính xác những frame nào được phép gây sát thương. Là artist, đây là nơi <i>bạn</i> điều khiển nhịp gameplay.</li>
+  <li><b>Blueprint Interface</b> (<code>BPI_ClawHitbox</code>): notify hỏi "đưa tôi hitbox móng vuốt của bạn" mà không cần biết class của nhân vật. Cùng một notify dùng được cho mọi nhân vật implement interface này.</li>
+  <li><b>Send Gameplay Event to Actor</b> được gửi tới <b>self</b> (kẻ tấn công), vì ability của <i>kẻ tấn công</i> mới là thứ đang chờ. <i>Nạn nhân</i> được gửi kèm trong payload dưới dạng Target Data.</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="cues">9. Gameplay Cues</h2>
+<p class="en"><code>GC_Dash</code> is linked to the tag <code>GameplayCue.Movement.Dash</code>. <code>GA_Dash</code> calls <b>Add GameplayCue To Owner</b> with <i>Remove on Ability End = true</i>, so the cue plays while the dash lasts and stops by itself.</p>
+<p class="vi"><code>GC_Dash</code> được liên kết với tag <code>GameplayCue.Movement.Dash</code>. <code>GA_Dash</code> gọi <b>Add GameplayCue To Owner</b> với <i>Remove on Ability End = true</i>, nên cue chạy suốt cú lướt và tự dừng.</p>
+<table>
+<tr><th><span class="en">Cue type</span><span class="vi">Loại cue</span></th><th><span class="en">When to use</span><span class="vi">Khi nào dùng</span></th></tr>
+<tr><td><b>GameplayCueNotify_Static</b></td><td><span class="en">One-shot, no state: a hit spark or impact sound (Execute)</span><span class="vi">Chạy một lần, không lưu trạng thái: tia lửa khi trúng đòn hoặc âm thanh va chạm (Execute)</span></td></tr>
+<tr><td><b>GameplayCueNotify_Actor</b></td><td><span class="en">Lasting effect with its own actor: a dash trail or burning aura (OnActive / WhileActive / OnRemove)</span><span class="vi">Hiệu ứng kéo dài có actor riêng: vệt lướt hoặc hào quang lửa (OnActive / WhileActive / OnRemove)</span></td></tr>
+</table>
+<div class="box art"><b class="label"><span class="en">Why cues matter to you as an artist</span><span class="vi">Vì sao cue quan trọng với bạn, một artist</span></b>
+<span class="en">Cues are <i>your</i> space. Gameplay code only says "GameplayCue.Movement.Dash happened". Which Niagara system, sound or camera shake plays is decided entirely inside the cue. You can swap VFX without touching a single ability. Try adding a <code>GameplayCue.Hit.Claw</code> Static cue to <code>GE_Claw&#272;amage</code> that spawns your <code>NS_LightningBurst</code>.</span>
+<span class="vi">Cue là không gian của <i>bạn</i>. Code gameplay chỉ nói "GameplayCue.Movement.Dash đã xảy ra". Niagara system, âm thanh hay camera shake nào được chạy là do cue quyết định hoàn toàn. Bạn có thể thay VFX mà không phải đụng tới bất kỳ ability nào. Hãy thử thêm một cue Static <code>GameplayCue.Hit.Claw</code> vào <code>GE_Claw&#272;amage</code> để spawn <code>NS_LightningBurst</code> của bạn.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="input">10. Input &rarr; Ability (Enhanced Input)</h2>
+<table>
+<tr><th>Input Action</th><th><span class="en">Key</span><span class="vi">Phím</span></th><th><span class="en">What it does in BP_SaberTooth-ASC</span><span class="vi">Làm gì trong BP_SaberTooth-ASC</span></th></tr>
+<tr><td><code>IA_Move</code></td><td>WASD (IMC_Default)</td><td><span class="en">Calls the <code>Move</code> function &rarr; Add Movement Input along control yaw</span><span class="vi">Gọi hàm <code>Move</code> &rarr; Add Movement Input theo hướng control yaw</span></td></tr>
+<tr><td><code>IA_Look</code> / <code>IA_MouseLook</code></td><td><span class="en">Mouse / stick</span><span class="vi">Chuột / cần analog</span></td><td><span class="en"><code>Aim</code> &rarr; add yaw and pitch</span><span class="vi"><code>Aim</code> &rarr; cộng yaw và pitch</span></td></tr>
+<tr><td><code>IA_Jump</code></td><td>Space</td><td><span class="en">Jump / Stop Jumping (not GAS)</span><span class="vi">Jump / Stop Jumping (không dùng GAS)</span></td></tr>
+<tr><td><code>IA_Dash</code></td><td>Left Shift (IMC_Sabertooth)</td><td>Try Activate Ability by Class (GA_Dash)</td></tr>
+<tr><td><code>IA_Attack</code></td><td>E (IMC_Sabertooth)</td><td>Stop Movement &rarr; Try Activate Ability by Class (GA_ClawAttack)</td></tr>
+<tr><td><code>IA_Escape</code> / <code>IA_UI</code></td><td>Esc</td><td><span class="en">CommonUI exit confirmation</span><span class="vi">Hộp thoại xác nhận thoát của CommonUI</span></td></tr>
+</table>
+<p class="en">Mapping contexts (IMC_Default, IMC_MouseLook, IMC_Sabertooth) are added in <code>BP_ThirdPersonPlayerController</code> BeginPlay with <b>Add Mapping Context</b>.</p>
+<p class="vi">Các mapping context (IMC_Default, IMC_MouseLook, IMC_Sabertooth) được thêm trong BeginPlay của <code>BP_ThirdPersonPlayerController</code> bằng <b>Add Mapping Context</b>.</p>
+<div class="box tip"><b class="label"><span class="en">Next step after "by Class"</span><span class="vi">Bước tiếp theo sau "by Class"</span></b>
+<span class="en"><i>Try Activate Ability by Class</i> is fine for learning. Bigger projects use <b>Try Activate Abilities by Tag</b>: input sends <code>Ability.Attack.Claw</code>, and the character can swap which GA owns that tag (claw vs. punch) without touching input. Lyra goes further and maps <b>Input Tags &rarr; Abilities</b> in a Data Asset.</span>
+<span class="vi"><i>Try Activate Ability by Class</i> ổn cho việc học. Dự án lớn hơn dùng <b>Try Activate Abilities by Tag</b>: input gửi <code>Ability.Attack.Claw</code>, và nhân vật có thể đổi GA nào sở hữu tag đó (cào hay đấm) mà không phải sửa input. Lyra còn đi xa hơn, ánh xạ <b>Input Tag &rarr; Ability</b> trong một Data Asset.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="ui"><span class="en">11. UI, CommonUI and input modes: lessons from debugging</span><span class="vi">11. UI, CommonUI và input mode: bài học từ quá trình debug</span></h2>
+<h3><span class="en">11.1 Showing attributes in the HUD</span><span class="vi">11.1 Hiển thị attribute trên HUD</span></h3>
+<p class="en">Widgets (<code>WBP_PlayerStatsBar</code>, <code>WBP_StatusImage</code>, <code>WBP_NPCLifeBar</code>) should <b>react</b> to attribute changes instead of polling on Tick. The GAS way:</p>
+<p class="vi">Các widget (<code>WBP_PlayerStatsBar</code>, <code>WBP_StatusImage</code>, <code>WBP_NPCLifeBar</code>) nên <b>phản ứng</b> khi attribute thay đổi thay vì liên tục kiểm tra trong Tick. Cách làm theo GAS:</p>
+<pre><code>Event Construct
+  -&gt; Get Ability System Component (Owning Player Pawn)
+  -&gt; Wait for Attribute Changed (Health)  --Changed--&gt;  Set Percent (NewValue / MaxHealth)</code></pre>
+<p class="en">The same <i>Wait for Attribute Changed</i> node is already used in <code>BP_SaberTooth-ASC</code> for regen. Reuse that knowledge in the widgets.</p>
+<p class="vi">Chính node <i>Wait for Attribute Changed</i> này đã được dùng trong <code>BP_SaberTooth-ASC</code> cho việc hồi phục. Hãy dùng lại kiến thức đó trong widget.</p>
+
+<h3><span class="en">11.2 Ability icons</span><span class="vi">11.2 Icon ability</span></h3>
+<p class="en"><code>WBP_Ability_Claw</code> and <code>WBP_Ability_Dash</code> can show cooldowns by listening for the tag <code>Cooldown.Dash</code> (<b>Wait Gameplay Tag Add / Remove</b>) and reading the remaining time from the ASC (<b>Get Active Effects Time Remaining</b> filtered by that tag).</p>
+<p class="vi"><code>WBP_Ability_Claw</code> và <code>WBP_Ability_Dash</code> có thể hiển thị cooldown bằng cách lắng nghe tag <code>Cooldown.Dash</code> (<b>Wait Gameplay Tag Add / Remove</b>) và đọc thời gian còn lại từ ASC (<b>Get Active Effects Time Remaining</b> lọc theo tag đó).</p>
+
+<h3><span class="en">11.3 What we learned the hard way about input</span><span class="vi">11.3 Những bài học xương máu về input</span></h3>
+<table>
+<tr><th><span class="en">Symptom</span><span class="vi">Triệu chứng</span></th><th><span class="en">Cause</span><span class="vi">Nguyên nhân</span></th><th><span class="en">Fix</span><span class="vi">Cách sửa</span></th></tr>
+<tr><td><span class="en">Character keeps moving after you release W; other actions fire randomly</span><span class="vi">Nhân vật vẫn chạy sau khi thả W; các action khác kích hoạt ngẫu nhiên</span></td><td><span class="en"><code>Set Input Mode UI Only</code> on BeginPlay. The key-up never reaches Enhanced Input. All the nodes had Flush Input = false.</span><span class="vi"><code>Set Input Mode UI Only</code> trong BeginPlay. Sự kiện thả phím không bao giờ tới được Enhanced Input. Tất cả các node đều để Flush Input = false.</span></td><td><span class="en">Use <b>Game Only</b> in gameplay. Set Flush Input = true whenever you switch modes.</span><span class="vi">Dùng <b>Game Only</b> khi đang chơi. Đặt Flush Input = true mỗi khi đổi mode.</span></td></tr>
+<tr><td><span class="en">No mouse cursor on the Esc dialog</span><span class="vi">Không thấy con trỏ chuột trên hộp thoại Esc</span></td><td><span class="en">Input Mode doesn't show the cursor</span><span class="vi">Input Mode không tự hiện con trỏ</span></td><td><span class="en"><b>Set Show Mouse Cursor</b> true/false with the mode change</span><span class="vi"><b>Set Show Mouse Cursor</b> true/false cùng lúc đổi mode</span></td></tr>
+<tr><td><span class="en">No control after closing the dialog</span><span class="vi">Mất điều khiển sau khi đóng hộp thoại</span></td><td><span class="en">The HUD (<code>WBP_StatusImage</code>, an activatable widget) re-activates and <b>steals keyboard focus</b></span><span class="vi">HUD (<code>WBP_StatusImage</code>, một activatable widget) được kích hoạt lại và <b>chiếm keyboard focus</b></span></td><td><span class="en">Untick <b>Supports Activation Focus</b> on the HUD. Restore game mode in <b>On Deactivated</b>.</span><span class="vi">Bỏ tick <b>Supports Activation Focus</b> trên HUD. Khôi phục game mode trong <b>On Deactivated</b>.</span></td></tr>
+</table>
+<p class="en">The C++ <code>APlayerControllerBase::OpenCombatMenu</code> shows the correct pattern: set the mode, set <code>bShowMouseCursor</code>, pause and unpause, all together. In CommonUI, the cleaner way is to override <b>Get Desired Input Config</b> on each activatable widget and let the action router switch modes.</p>
+<p class="vi">Hàm C++ <code>APlayerControllerBase::OpenCombatMenu</code> thể hiện đúng mẫu: đặt mode, đặt <code>bShowMouseCursor</code>, pause và unpause, tất cả cùng nhau. Trong CommonUI, cách gọn hơn là override <b>Get Desired Input Config</b> trên từng activatable widget và để action router tự đổi mode.</p>
+
+<!-- ============================================================ -->
+<h2 id="npc"><span class="en">12. The enemy NPC (<code>BP_EnemyNPC</code>)</span><span class="vi">12. NPC kẻ địch (<code>BP_EnemyNPC</code>)</span></h2>
+<p class="en">The enemy is built from the UE 5.7 <b>Combat template</b> (<code>Variant_Combat</code>) and reparented to your <code>CharacterBase</code>. So it now has <b>two systems</b> side by side:</p>
+<p class="vi">Kẻ địch được xây từ <b>Combat template</b> của UE 5.7 (<code>Variant_Combat</code>) và đã được đổi class cha sang <code>CharacterBase</code> của bạn. Vì vậy hiện nó có <b>hai hệ thống</b> chạy song song:</p>
+<table>
+<tr><th><span class="en">Template system (Blueprint variables)</span><span class="vi">Hệ thống của template (biến Blueprint)</span></th><th><span class="en">GAS system (from CharacterBase)</span><span class="vi">Hệ thống GAS (từ CharacterBase)</span></th></tr>
+<tr><td><code>Current HP</code>, <code>Max HP</code>, <b>Event Apply Damage</b>, <b>Event Handle Death</b></td><td><span class="en"><code>Health</code> attribute, damage GEs, <code>GE_Death</code>, the <code>State.Death</code> tag</span><span class="vi">Attribute <code>Health</code>, các GE sát thương, <code>GE_Death</code>, tag <code>State.Death</code></span></td></tr>
+<tr><td><span class="en">Attacks run by StateTree tasks: <code>Do AI Combo Attack</code>, <code>Do AI Charged Attack</code></span><span class="vi">Đòn tấn công do StateTree task chạy: <code>Do AI Combo Attack</code>, <code>Do AI Charged Attack</code></span></td><td><span class="en"><code>GA_MeleeAttack_Punch</code> through <code>Event.Montage.ComboPunch</code></span><span class="vi"><code>GA_MeleeAttack_Punch</code> thông qua <code>Event.Montage.ComboPunch</code></span></td></tr>
+<tr><td><span class="en">Event dispatchers <code>On Attack Completed</code> / <code>On Enemy Died</code> (to the StateTree and spawner)</span><span class="vi">Event dispatcher <code>On Attack Completed</code> / <code>On Enemy Died</code> (gửi tới StateTree và bộ spawn)</span></td><td><span class="en">Tags and gameplay events</span><span class="vi">Tag và gameplay event</span></td></tr>
+</table>
+<div class="box tip"><b class="label"><span class="en">Learning goal</span><span class="vi">Mục tiêu học tập</span></b>
+<span class="en">Gradually move the enemy to <b>GAS only</b>: health lives in the attribute set, death is driven by a tag, and attacks are abilities that the StateTree activates. That's the core of the learning plan in <a href="#plan">section 15</a>.</span>
+<span class="vi">Dần dần chuyển kẻ địch sang <b>chỉ dùng GAS</b>: máu nằm trong attribute set, cái chết được điều khiển bằng tag, và đòn tấn công là ability do StateTree kích hoạt. Đó là cốt lõi của lộ trình học ở <a href="#plan">mục 15</a>.</span></div>
+
+<!-- ============================================================ -->
+<h2 id="issues"><span class="en">13. Things to clean up (good small exercises)</span><span class="vi">13. Những chỗ cần dọn dẹp (bài tập nhỏ hữu ích)</span></h2>
+<table>
+<tr><th>#</th><th><span class="en">Where</span><span class="vi">Ở đâu</span></th><th><span class="en">Issue</span><span class="vi">Vấn đề</span></th><th><span class="en">Why it matters / fix</span><span class="vi">Vì sao quan trọng / cách sửa</span></th></tr>
+<tr><td>1</td><td><code>CharacterBase.cpp</code> <code>SendAbilityChanggeEvent</code></td><td><span class="en">Requests the tag <code>"Event.AbilityChange"</code>, but the registered tag is <code>Event.Ability.Changed</code></span><span class="vi">Yêu cầu tag <code>"Event.AbilityChange"</code>, nhưng tag đã đăng ký là <code>Event.Ability.Changed</code></span></td><td><span class="en">RequestGameplayTag on an unknown tag logs an error and returns an empty tag, so the event never fires. Use <code>Event.Ability.Changed</code> (and fix the "Changge" typo).</span><span class="vi">RequestGameplayTag với tag không tồn tại sẽ ghi log lỗi và trả về tag rỗng, nên event không bao giờ được gửi. Dùng <code>Event.Ability.Changed</code> (và sửa lỗi chính tả "Changge").</span></td></tr>
+<tr><td>2</td><td><code>CharacterBase.cpp:16</code></td><td><span class="en">Creates <code>UAbilitySystemComponent</code>, not your new <code>UAbilitySystemComponentBase</code></span><span class="vi">Tạo <code>UAbilitySystemComponent</code>, không phải <code>UAbilitySystemComponentBase</code> mới của bạn</span></td><td><span class="en">Your new class is unused. Switch it when you add custom ASC features. Also turn off <code>bCanEverTick</code> in it, because the ASC doesn't need your empty Tick.</span><span class="vi">Class mới của bạn chưa được dùng. Hãy chuyển sang nó khi bạn thêm tính năng riêng cho ASC. Đồng thời tắt <code>bCanEverTick</code> trong đó, vì ASC không cần hàm Tick rỗng của bạn.</span></td></tr>
+<tr><td>3</td><td><code>CharacterBase.h</code></td><td><span class="en">Raw pointers <code>UBaseAttributeSet*</code>, <code>UAbilitySystemComponent*</code></span><span class="vi">Con trỏ thô <code>UBaseAttributeSet*</code>, <code>UAbilitySystemComponent*</code></span></td><td><span class="en">The UE5 style is <code>TObjectPtr&lt;...&gt;</code> for UPROPERTY members.</span><span class="vi">Phong cách UE5 là dùng <code>TObjectPtr&lt;...&gt;</code> cho các thành viên UPROPERTY.</span></td></tr>
+<tr><td>4</td><td><code>BaseAttributeSet.cpp</code></td><td><span class="en"><code>Damage</code> meta attribute isn't processed</span><span class="vi">Meta attribute <code>Damage</code> chưa được xử lý</span></td><td><span class="en">Add the pattern from <a href="#attr">4.4</a>.</span><span class="vi">Thêm mẫu ở <a href="#attr">4.4</a>.</span></td></tr>
+<tr><td>5</td><td><code>GA_ClawAttack</code></td><td><span class="en">End Ability only on OnCompleted. No commit.</span><span class="vi">End Ability chỉ ở OnCompleted. Không có commit.</span></td><td><span class="en">Connect Interrupted, Cancelled and BlendOut. Add a cooldown GE.</span><span class="vi">Nối Interrupted, Cancelled và BlendOut. Thêm một GE cooldown.</span></td></tr>
+<tr><td>6</td><td><code>GA_Dash</code></td><td><span class="en">CommitAbilityCost result ignored</span><span class="vi">Bỏ qua kết quả của CommitAbilityCost</span></td><td><span class="en">Branch on the result and end the ability if it fails.</span><span class="vi">Dùng Branch theo kết quả và kết thúc ability nếu thất bại.</span></td></tr>
+<tr><td>7</td><td>Tags</td><td><span class="en">Both <code>State.Death</code> and <code>Status.Death</code> exist</span><span class="vi">Tồn tại cả <code>State.Death</code> lẫn <code>Status.Death</code></span></td><td><span class="en">Keep one so listeners don't miss the death.</span><span class="vi">Giữ lại một tag để các listener không bỏ lỡ sự kiện chết.</span></td></tr>
+<tr><td>8</td><td><code>BP_SaberTooth-ASC</code></td><td><span class="en"><code>Wait Gameplay Tag Add to Actor (State.Death)</code> has no exec input, and <code>Grant Initial Ability</code> is disconnected</span><span class="vi"><code>Wait Gameplay Tag Add to Actor (State.Death)</code> không có exec đầu vào, và <code>Grant Initial Ability</code> bị ngắt kết nối</span></td><td><span class="en">Either wire them up or delete them, so the graph shows what really runs.</span><span class="vi">Hoặc nối chúng lại, hoặc xóa đi, để graph thể hiện đúng những gì thực sự chạy.</span></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="cheat"><span class="en">14. Cheat sheet</span><span class="vi">14. Bảng tra nhanh</span></h2>
+<table>
+<tr><th><span class="en">I want to&hellip;</span><span class="vi">Tôi muốn&hellip;</span></th><th><span class="en">Use</span><span class="vi">Dùng</span></th></tr>
+<tr><td><span class="en">Give a character an ability</span><span class="vi">Cấp ability cho nhân vật</span></td><td><span class="en"><code>GrantAbilities</code> / StartingAbilities (server only)</span><span class="vi"><code>GrantAbilities</code> / StartingAbilities (chỉ trên server)</span></td></tr>
+<tr><td><span class="en">Trigger it from a key</span><span class="vi">Kích hoạt bằng phím</span></td><td><span class="en">IA_* event &rarr; <b>Try Activate Ability by Class</b> (or by Tag)</span><span class="vi">Event IA_* &rarr; <b>Try Activate Ability by Class</b> (hoặc by Tag)</span></td></tr>
+<tr><td><span class="en">Spend stamina</span><span class="vi">Tiêu stamina</span></td><td>Cost GE (Instant, &minus;Stamina) + <b>CommitAbility(Cost)</b></td></tr>
+<tr><td><span class="en">Add a cooldown</span><span class="vi">Thêm cooldown</span></td><td><span class="en">Duration GE that grants <code>Cooldown.X</code> + <b>CommitAbility(Cooldown)</b></span><span class="vi">GE Duration cấp <code>Cooldown.X</code> + <b>CommitAbility(Cooldown)</b></span></td></tr>
+<tr><td><span class="en">Deal damage</span><span class="vi">Gây sát thương</span></td><td><span class="en">Instant GE on Health (or on Damage, the meta attribute) &rarr; <b>Apply GE to Target</b></span><span class="vi">GE Instant lên Health (hoặc lên Damage, meta attribute) &rarr; <b>Apply GE to Target</b></span></td></tr>
+<tr><td><span class="en">Damage amount decided at runtime</span><span class="vi">Lượng sát thương quyết định lúc chạy</span></td><td><span class="en"><b>Set By Caller</b> + <code>Data.*</code> tag</span><span class="vi"><b>Set By Caller</b> + tag <code>Data.*</code></span></td></tr>
+<tr><td><span class="en">Buff for 5 seconds</span><span class="vi">Buff trong 5 giây</span></td><td><span class="en">Has Duration GE with modifier</span><span class="vi">GE Has Duration có modifier</span></td></tr>
+<tr><td><span class="en">Regen / damage over time</span><span class="vi">Hồi phục / sát thương theo thời gian</span></td><td><span class="en">Infinite or Duration GE with a <b>Period</b></span><span class="vi">GE Infinite hoặc Duration có <b>Period</b></span></td></tr>
+<tr><td><span class="en">Wait inside an ability</span><span class="vi">Chờ bên trong ability</span></td><td>Ability Tasks: PlayMontageAndWait, WaitGameplayEvent, WaitDelay&hellip;</td></tr>
+<tr><td><span class="en">Animation tells the ability "hit now"</span><span class="vi">Animation báo ability "đánh trúng ngay bây giờ"</span></td><td>Anim Notify (State) &rarr; <b>Send Gameplay Event to Actor</b></td></tr>
+<tr><td><span class="en">React to Health changing (BP / UI)</span><span class="vi">Phản ứng khi Health thay đổi (BP / UI)</span></td><td><b>Wait for Attribute Changed</b></td></tr>
+<tr><td><span class="en">React to a state (dead, stunned)</span><span class="vi">Phản ứng với trạng thái (chết, choáng)</span></td><td><b>Wait Gameplay Tag Add/Remove to Actor</b></td></tr>
+<tr><td><span class="en">VFX/SFX for an ability</span><span class="vi">VFX/SFX cho ability</span></td><td><span class="en">Gameplay Cue (<code>GameplayCue.*</code> tag)</span><span class="vi">Gameplay Cue (tag <code>GameplayCue.*</code>)</span></td></tr>
+<tr><td><span class="en">Block abilities while dead</span><span class="vi">Chặn ability khi đã chết</span></td><td><span class="en">Ability's <i>Activation Blocked Tags</i> = <code>State.Death</code></span><span class="vi"><i>Activation Blocked Tags</i> của ability = <code>State.Death</code></span></td></tr>
+<tr><td>Debug</td><td><span class="en">Console: <code>showdebug abilitysystem</code> (Page Up/Down to cycle targets), Gameplay Debugger (apostrophe <code>'</code> key, then the Ability System category)</span><span class="vi">Console: <code>showdebug abilitysystem</code> (Page Up/Down để đổi mục tiêu), Gameplay Debugger (phím nháy đơn <code>'</code>, rồi chọn mục Ability System)</span></td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="plan"><span class="en">15. Learning plan: StateTree &amp; Behavior Tree on this project</span><span class="vi">15. Lộ trình học: StateTree &amp; Behavior Tree trên dự án này</span></h2>
+<p class="en">Your branch is <code>Fix-UI-Health-Bar-and-Make-AI-NPC</code>, and the project already contains a working StateTree enemy (<code>ST_CombatEnemy</code> + <code>BP_CombatAIController</code> + 9 StateTree tasks/conditions + 3 EQS queries). The plan starts by <b>reading</b> that, then <b>connects</b> it to GAS, then <b>rebuilds</b> the same enemy as a Behavior Tree so you can compare the two systems.</p>
+<p class="vi">Branch của bạn là <code>Fix-UI-Health-Bar-and-Make-AI-NPC</code>, và dự án đã có sẵn một kẻ địch dùng StateTree hoạt động được (<code>ST_CombatEnemy</code> + <code>BP_CombatAIController</code> + 9 StateTree task/condition + 3 EQS query). Lộ trình bắt đầu bằng việc <b>đọc hiểu</b> phần đó, sau đó <b>kết nối</b> nó với GAS, rồi <b>xây lại</b> cùng kẻ địch đó bằng Behavior Tree để bạn so sánh hai hệ thống.</p>
+
+<h3><span class="en">StateTree vs Behavior Tree in one table</span><span class="vi">StateTree và Behavior Tree trong một bảng</span></h3>
+<table>
+<tr><th></th><th><span class="en">StateTree (UE 5.x, recommended for new AI)</span><span class="vi">StateTree (UE 5.x, khuyên dùng cho AI mới)</span></th><th><span class="en">Behavior Tree (classic)</span><span class="vi">Behavior Tree (cổ điển)</span></th></tr>
+<tr><td><span class="en">Mental model</span><span class="vi">Cách tư duy</span></td><td><span class="en"><b>States</b> with enter/exit and <b>transitions</b>, like an Animation Blueprint state machine</span><span class="vi">Các <b>state</b> có enter/exit và <b>transition</b>, giống state machine trong Animation Blueprint</span></td><td><span class="en">A <b>tree</b> evaluated left to right, top to bottom: "what should I do right now?"</span><span class="vi">Một <b>cây</b> được duyệt từ trái sang phải, trên xuống dưới: "giờ tôi nên làm gì?"</span></td></tr>
+<tr><td><span class="en">Data</span><span class="vi">Dữ liệu</span></td><td><span class="en">Parameters, plus <b>property binding</b> between tasks (outputs &rarr; inputs)</span><span class="vi">Parameter, cùng <b>property binding</b> giữa các task (output &rarr; input)</span></td><td><span class="en"><b>Blackboard</b> keys</span><span class="vi">Các key của <b>Blackboard</b></span></td></tr>
+<tr><td><span class="en">Building blocks</span><span class="vi">Thành phần</span></td><td>Tasks, Conditions, Evaluators/Global Tasks, Transitions</td><td>Composites (Selector, Sequence), Tasks, Decorators, Services</td></tr>
+<tr><td><span class="en">Runs on</span><span class="vi">Chạy trên</span></td><td><span class="en">AIController's <b>StateTree AI Component</b></span><span class="vi"><b>StateTree AI Component</b> của AIController</span></td><td>AIController &rarr; <b>Run Behavior Tree</b></td></tr>
+<tr><td><span class="en">Feels like</span><span class="vi">Cảm giác giống</span></td><td><span class="en">The ABP state machine you already know as an artist</span><span class="vi">State machine trong ABP mà bạn đã quen khi làm artist</span></td><td><span class="en">A flowchart of priorities</span><span class="vi">Một lưu đồ các mức ưu tiên</span></td></tr>
+</table>
+
+<div class="week">
+<h4><span class="en">Phase 1: Read the existing StateTree</span><span class="vi">Giai đoạn 1: Đọc hiểu StateTree có sẵn</span> <span class="tag"><span class="en">~1 week</span><span class="vi">~1 tuần</span></span></h4>
+<ol class="en">
+  <li>Open <code>BP_CombatAIController</code> and find the <b>StateTree AI Component</b> and the tree it runs (<code>ST_CombatEnemy</code>).</li>
+  <li>Open <code>ST_CombatEnemy</code>. On paper, draw every state and its transitions. Note which <b>Task</b> runs in each state and which <b>Condition</b> guards each transition.</li>
+  <li>Open each task Blueprint in <code>Variant_Combat/Blueprints/AI/StateTreeTasks</code>. Learn the three events: <b>EnterState</b>, <b>Tick</b>, <b>ExitState</b>, and the call <b>Finish Task (Succeeded/Failed)</b>.</li>
+  <li>Look at <code>StateTreeTask_ComboAttack</code>: it calls <code>Do AI Combo Attack</code> on the NPC and waits for the <code>On Attack Completed</code> dispatcher. This is the same "start, wait, finish" idea as a GAS ability task.</li>
+  <li>Play in the editor with the <b>StateTree Debugger</b> (open from the StateTree editor toolbar) and the Gameplay Debugger (<code>'</code> key) to watch states change live.</li>
+</ol>
+<ol class="vi">
+  <li>Mở <code>BP_CombatAIController</code> và tìm <b>StateTree AI Component</b> cùng cây mà nó chạy (<code>ST_CombatEnemy</code>).</li>
+  <li>Mở <code>ST_CombatEnemy</code>. Vẽ ra giấy mọi state và transition của nó. Ghi chú <b>Task</b> nào chạy trong mỗi state và <b>Condition</b> nào canh giữ mỗi transition.</li>
+  <li>Mở từng task Blueprint trong <code>Variant_Combat/Blueprints/AI/StateTreeTasks</code>. Học ba event: <b>EnterState</b>, <b>Tick</b>, <b>ExitState</b>, và lệnh gọi <b>Finish Task (Succeeded/Failed)</b>.</li>
+  <li>Xem <code>StateTreeTask_ComboAttack</code>: nó gọi <code>Do AI Combo Attack</code> trên NPC và chờ dispatcher <code>On Attack Completed</code>. Đây cũng là ý tưởng "bắt đầu, chờ, kết thúc" giống ability task của GAS.</li>
+  <li>Chạy thử trong editor với <b>StateTree Debugger</b> (mở từ thanh công cụ của StateTree editor) và Gameplay Debugger (phím <code>'</code>) để xem state thay đổi trực tiếp.</li>
+</ol>
+<ul class="check en"><li>I can explain why the enemy switches from chasing to attacking.</li><li>I can explain what EnvQuery_Flank / Evade / Fallback return.</li></ul>
+<ul class="check vi"><li>Tôi giải thích được vì sao kẻ địch chuyển từ đuổi theo sang tấn công.</li><li>Tôi giải thích được EnvQuery_Flank / Evade / Fallback trả về gì.</li></ul>
+</div>
+
+<div class="week">
+<h4><span class="en">Phase 2: Connect the StateTree to GAS</span><span class="vi">Giai đoạn 2: Kết nối StateTree với GAS</span> <span class="tag"><span class="en">~1&ndash;2 weeks</span><span class="vi">~1&ndash;2 tuần</span></span></h4>
+<ol class="en">
+  <li><b>Health via GAS.</b> Replace <code>Current HP</code> / <code>Max HP</code> with the <code>Health</code> attribute. The NPC's life bar (<code>WBP_NPCLifeBar</code>) should use <i>Wait for Attribute Changed</i>.</li>
+  <li><b>Death via tag.</b> When Health reaches 0 (in <code>PostGameplayEffectExecute</code> or a BP listener), activate <code>GA_Death</code>, which grants <code>State.Death</code>.</li>
+  <li><b>New StateTree Condition</b> <code>STC_HasGameplayTag</code>: input = Actor plus Tag. It returns true if the actor's ASC has the tag (<i>Has Matching Gameplay Tag</i>). Use it to add a high-priority <b>Dead</b> state that every other state transitions into.</li>
+  <li><b>New StateTree Task</b> <code>STT_ActivateAbilityByTag</code>: in EnterState, call <i>Try Activate Abilities by Tag</i> on the NPC's ASC. Then listen for the ability ending (<i>Wait for Gameplay Ability End</i>, or the ASC's On Ability Ended) and call Finish Task. Replace <code>StateTreeTask_ComboAttack</code> with this task plus <code>GA_MeleeAttack_Punch</code>.</li>
+  <li><b>Cooldown awareness:</b> add a transition condition "NOT has <code>Cooldown.Punch</code>" so the AI circles or flanks while its attack is on cooldown.</li>
+  <li><b>Stamina for the AI:</b> give the NPC a cost GE. Add a "Recover" state entered when Stamina &lt; 20%, using a condition that reads the attribute (<i>Get Float Attribute</i>).</li>
+</ol>
+<ol class="vi">
+  <li><b>Máu qua GAS.</b> Thay <code>Current HP</code> / <code>Max HP</code> bằng attribute <code>Health</code>. Thanh máu của NPC (<code>WBP_NPCLifeBar</code>) nên dùng <i>Wait for Attribute Changed</i>.</li>
+  <li><b>Chết qua tag.</b> Khi Health về 0 (trong <code>PostGameplayEffectExecute</code> hoặc một listener BP), kích hoạt <code>GA_Death</code>, ability này cấp <code>State.Death</code>.</li>
+  <li><b>StateTree Condition mới</b> <code>STC_HasGameplayTag</code>: đầu vào = Actor và Tag. Trả về true nếu ASC của actor có tag đó (<i>Has Matching Gameplay Tag</i>). Dùng nó để thêm state <b>Dead</b> có độ ưu tiên cao mà mọi state khác đều có thể chuyển vào.</li>
+  <li><b>StateTree Task mới</b> <code>STT_ActivateAbilityByTag</code>: trong EnterState, gọi <i>Try Activate Abilities by Tag</i> trên ASC của NPC. Sau đó lắng nghe khi ability kết thúc (<i>Wait for Gameplay Ability End</i>, hoặc On Ability Ended của ASC) và gọi Finish Task. Thay <code>StateTreeTask_ComboAttack</code> bằng task này cùng <code>GA_MeleeAttack_Punch</code>.</li>
+  <li><b>Nhận biết cooldown:</b> thêm điều kiện transition "KHÔNG có <code>Cooldown.Punch</code>" để AI đi vòng hoặc đánh tạt sườn trong lúc đòn tấn công đang hồi chiêu.</li>
+  <li><b>Stamina cho AI:</b> cho NPC một cost GE. Thêm state "Recover" được kích hoạt khi Stamina &lt; 20%, dùng một condition đọc attribute (<i>Get Float Attribute</i>).</li>
+</ol>
+<ul class="check en"><li>The NPC dies only through GAS.</li><li>The StateTree never calls the attack function directly, only abilities by tag.</li><li>The burning area damages the NPC too, with no extra code.</li></ul>
+<ul class="check vi"><li>NPC chỉ chết thông qua GAS.</li><li>StateTree không bao giờ gọi trực tiếp hàm tấn công, chỉ kích hoạt ability theo tag.</li><li>Vùng lửa cũng gây sát thương cho NPC mà không cần thêm code.</li></ul>
+</div>
+
+<div class="week">
+<h4><span class="en">Phase 3: Rebuild the same enemy with a Behavior Tree</span><span class="vi">Giai đoạn 3: Xây lại cùng kẻ địch bằng Behavior Tree</span> <span class="tag"><span class="en">~2 weeks</span><span class="vi">~2 tuần</span></span></h4>
+<ol class="en">
+  <li>Create <code>BB_Enemy</code> (Blackboard) with the keys <code>TargetActor</code> (Object), <code>MoveLocation</code> (Vector), <code>IsDead</code> (Bool) and <code>CanAttack</code> (Bool).</li>
+  <li>Create <code>BP_EnemyAIController_BT</code>. On Possess &rarr; <b>Run Behavior Tree</b>(<code>BT_Enemy</code>). Make a copy <code>BP_EnemyNPC_BT</code> that uses this controller, so the StateTree version keeps working.</li>
+  <li>Build <code>BT_Enemy</code> (tree below).</li>
+  <li><b>Service</b> <code>BTS_UpdateGASState</code> on the root Selector, ticking every 0.2 s. It writes <code>IsDead</code> (has <code>State.Death</code>) and <code>CanAttack</code> (NOT has <code>Cooldown.Punch</code>) into the Blackboard.</li>
+  <li><b>Decorator</b> <code>BTD_HasGameplayTag</code>: the BT version of the StateTree condition from Phase 2. Set <i>Observer Aborts = Both</i> so death interrupts everything.</li>
+  <li>Reuse the EQS queries the StateTree already uses. EQS works with both systems.</li>
+</ol>
+<ol class="vi">
+  <li>Tạo <code>BB_Enemy</code> (Blackboard) với các key <code>TargetActor</code> (Object), <code>MoveLocation</code> (Vector), <code>IsDead</code> (Bool) và <code>CanAttack</code> (Bool).</li>
+  <li>Tạo <code>BP_EnemyAIController_BT</code>. On Possess &rarr; <b>Run Behavior Tree</b>(<code>BT_Enemy</code>). Tạo bản sao <code>BP_EnemyNPC_BT</code> dùng controller này, để phiên bản StateTree vẫn tiếp tục hoạt động.</li>
+  <li>Xây <code>BT_Enemy</code> (cây bên dưới).</li>
+  <li><b>Service</b> <code>BTS_UpdateGASState</code> gắn trên Selector gốc, tick mỗi 0.2 giây. Nó ghi <code>IsDead</code> (có <code>State.Death</code>) và <code>CanAttack</code> (KHÔNG có <code>Cooldown.Punch</code>) vào Blackboard.</li>
+  <li><b>Decorator</b> <code>BTD_HasGameplayTag</code>: phiên bản BT của condition StateTree ở Giai đoạn 2. Đặt <i>Observer Aborts = Both</i> để cái chết ngắt mọi hành động.</li>
+  <li>Dùng lại các EQS query mà StateTree đang dùng. EQS hoạt động với cả hai hệ thống.</li>
+</ol>
+<pre><code>Root
++- Selector                       [Service: BTS_UpdateGASState]
+   +- [Decorator: IsDead == true]  -&gt; Task: Wait (long)
+   +- Sequence "Attack"   [Decorator: CanAttack]  [Decorator: distance to TargetActor &lt; 200]
+   |   +- Task: Rotate To Face BB Entry (TargetActor)
+   |   +- Task: BTT_ActivateAbilityByTag (Ability.Attack.Punch)
+   +- Sequence "Chase"    [Decorator: TargetActor Is Set]
+   |   +- Task: Move To (TargetActor)
+   +- Sequence "Reposition"
+       +- Task: Run EQS Query (EnvQuery_Flank -&gt; MoveLocation)
+       +- Task: Move To (MoveLocation)</code></pre>
+<ul class="check en"><li>The BT enemy and the StateTree enemy fight the player the same way.</li><li>I can explain Observer Aborts and why the death decorator needs it.</li></ul>
+<ul class="check vi"><li>Kẻ địch BT và kẻ địch StateTree chiến đấu với người chơi theo cùng một cách.</li><li>Tôi giải thích được Observer Aborts và vì sao decorator chết cần nó.</li></ul>
+</div>
+
+<div class="week">
+<h4><span class="en">Phase 4: Compare and extend</span><span class="vi">Giai đoạn 4: So sánh và mở rộng</span> <span class="tag"><span class="en">ongoing</span><span class="vi">liên tục</span></span></h4>
+<ol class="en">
+  <li>Put one BT enemy and one ST enemy in <code>GAS-Level</code>. Write down which one was easier to build, debug and change.</li>
+  <li>Add a <b>ranged attack</b> ability (<code>GA_LightningShot</code>) using your <code>NS_LightningProjectile</code>, with a Gameplay Cue for the impact. Teach <b>both</b> AIs to use it at range.</li>
+  <li>Add a <b>hit reaction</b>: a damage GE grants <code>Effect.HitReaction</code> for 0.3 s. A StateTree state or BT decorator stops attacking while it's present.</li>
+  <li>Move one StateTree task and one BT task to <b>C++</b> (<code>FStateTreeTaskCommonBase</code> / <code>UBTTaskNode</code>) once the Blueprint versions work.</li>
+</ol>
+<ol class="vi">
+  <li>Đặt một kẻ địch BT và một kẻ địch ST vào <code>GAS-Level</code>. Ghi lại cái nào dễ xây, dễ debug và dễ thay đổi hơn.</li>
+  <li>Thêm ability <b>tấn công tầm xa</b> (<code>GA_LightningShot</code>) dùng <code>NS_LightningProjectile</code> của bạn, kèm một Gameplay Cue cho lúc va chạm. Dạy <b>cả hai</b> AI dùng nó khi ở xa.</li>
+  <li>Thêm <b>phản ứng trúng đòn</b>: GE sát thương cấp <code>Effect.HitReaction</code> trong 0.3 giây. Một state StateTree hoặc decorator BT sẽ ngừng tấn công khi tag này còn tồn tại.</li>
+  <li>Chuyển một StateTree task và một BT task sang <b>C++</b> (<code>FStateTreeTaskCommonBase</code> / <code>UBTTaskNode</code>) khi phiên bản Blueprint đã chạy ổn.</li>
+</ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="links"><span class="en">16. Resources</span><span class="vi">16. Tài liệu tham khảo</span></h2>
+<ul class="en">
+  <li><b>tranek/GASDocumentation</b> (GitHub). This is the community GAS bible, and you already have a clone in <code>Documents/GitHub/GASDocumentation</code>. Read the sections on ASC, Attributes, Effects and Abilities alongside this guide.</li>
+  <li>Epic docs: <i>Gameplay Ability System</i>, <i>StateTree Overview</i>, <i>Behavior Tree Quick Start</i>, <i>Environment Query System</i> (dev.epicgames.com/documentation).</li>
+  <li><b>Lyra Starter Game</b>: Epic's production example of GAS + Enhanced Input + CommonUI. Look at how it maps input tags to abilities.</li>
+  <li>The <code>Variant_Combat</code> folder in this project: Epic's own StateTree combat enemy. You already own a great example.</li>
+</ul>
+<ul class="vi">
+  <li><b>tranek/GASDocumentation</b> (GitHub). Đây là "kinh thánh" GAS của cộng đồng, và bạn đã có bản clone ở <code>Documents/GitHub/GASDocumentation</code>. Đọc các phần về ASC, Attribute, Effect và Ability song song với tài liệu này.</li>
+  <li>Tài liệu của Epic: <i>Gameplay Ability System</i>, <i>StateTree Overview</i>, <i>Behavior Tree Quick Start</i>, <i>Environment Query System</i> (dev.epicgames.com/documentation).</li>
+  <li><b>Lyra Starter Game</b>: ví dụ cấp production của Epic về GAS + Enhanced Input + CommonUI. Xem cách nó ánh xạ input tag sang ability.</li>
+  <li>Thư mục <code>Variant_Combat</code> trong dự án này: kẻ địch chiến đấu dùng StateTree do chính Epic làm. Bạn đã sở hữu sẵn một ví dụ tuyệt vời.</li>
+</ul>
+
+<footer>
+<span class="en">Generated on 2026-10-27 from the Combat_PHKH source (branch <code>Fix-UI-Health-Bar-and-Make-AI-NPC</code>). The Blueprint flows were read from the asset graphs. Gameplay Effect magnitudes and durations were not readable through the tools, so open each GE to check its exact numbers.</span>
+<span class="vi">Tạo ngày 27/10/2026 từ mã nguồn Combat_PHKH (branch <code>Fix-UI-Health-Bar-and-Make-AI-NPC</code>). Các luồng Blueprint được đọc từ graph của asset. Không đọc được magnitude và thời lượng của Gameplay Effect qua công cụ, nên hãy mở từng GE để kiểm tra con số chính xác.</span>
+</footer>
+</main>
+
+<script>
+  (function () {
+    var KEY = "gasGuideLang";
+    var buttons = document.querySelectorAll("#lang button");
+    function setMode(mode) {
+      document.body.className = "mode-" + mode;
+      buttons.forEach(function (b) { b.classList.toggle("on", b.dataset.mode === mode); });
+      document.documentElement.lang = mode === "en" ? "en" : "vi";
+      try { localStorage.setItem(KEY, mode); } catch (e) {}
+    }
+    buttons.forEach(function (b) { b.addEventListener("click", function () { setMode(b.dataset.mode); }); });
+    var saved = null;
+    try { saved = localStorage.getItem(KEY); } catch (e) {}
+    setMode(saved === "en" || saved === "vi" ? saved : "both");
+  })();
+</script>
+</body>
+</html>
