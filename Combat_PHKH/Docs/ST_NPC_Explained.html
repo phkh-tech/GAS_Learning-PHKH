@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ST_NPC: How the NPC State Tree Works / State Tree của NPC hoạt động thế nào</title>
+<style>
+  :root {
+    --bg: #14161b; --panel: #1c1f26; --panel2: #232733; --text: #d9dde6; --muted: #9aa3b5;
+    --accent: #6cb6ff; --accent2: #f0a35e; --good: #6fd08c; --warn: #ffcc66; --bad: #ff7b7b;
+    --code: #0f1115; --border: #2e3340; --purple: #c39bff; --vi: #b9d7a8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: "Segoe UI", Roboto, "Noto Sans", sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; }
+  nav { position: fixed; top: 0; left: 0; bottom: 0; width: 290px; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--border); padding: 20px 14px; font-size: 14px; }
+  nav h2 { font-size: 15px; color: var(--accent); margin: 0 0 12px; }
+  nav a { display: block; color: var(--muted); text-decoration: none; padding: 4px 8px; border-radius: 4px; }
+  nav a:hover { background: var(--panel2); color: var(--text); }
+  nav .sub { padding-left: 22px; font-size: 13px; }
+  main { margin-left: 290px; padding: 30px 56px 80px; max-width: 1150px; }
+  h1 { font-size: 32px; margin: 0 0 6px; }
+  h2 { margin-top: 56px; padding-bottom: 6px; border-bottom: 2px solid var(--border); color: var(--accent); }
+  h3 { margin-top: 32px; color: var(--accent2); }
+  h4 { margin-bottom: 4px; }
+  .subtitle { color: var(--muted); margin-top: 0; }
+  code { font-family: Consolas, "Cascadia Code", monospace; background: var(--panel2); padding: 1px 5px; border-radius: 4px; font-size: 0.92em; color: #e6c07b; }
+  pre { background: var(--code); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-size: 13.5px; line-height: 1.5; }
+  pre code { background: none; padding: 0; color: #cfd6e4; }
+  table { border-collapse: collapse; width: 100%; margin: 14px 0; font-size: 14.5px; }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: var(--panel2); color: var(--accent); }
+  tr:nth-child(even) td { background: #181b21; }
+  .box { border-radius: 8px; padding: 12px 16px; margin: 16px 0; border-left: 4px solid; background: var(--panel); }
+  .box.tip { border-color: var(--good); }
+  .box.warn { border-color: var(--warn); }
+  .box.bad { border-color: var(--bad); }
+  .box.art { border-color: var(--accent2); }
+  .box b.label { display: block; margin-bottom: 4px; }
+  .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 16px 0; }
+  .flow .step { background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 13.5px; max-width: 260px; }
+  .flow .step small { display: block; color: var(--muted); }
+  .flow .arrow { color: var(--accent); font-weight: bold; }
+  .map { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 18px 0; }
+  .map .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+  .map .card h4 { margin: 0 0 6px; color: var(--accent2); }
+  .map .card p { margin: 0; font-size: 14px; color: var(--muted); }
+  footer { margin-top: 60px; color: var(--muted); font-size: 13px; }
+
+  /* ---------- State tree diagram / Sơ đồ cây ---------- */
+  ul.tree, ul.tree ul { list-style: none; margin: 0; padding-left: 26px; }
+  ul.tree { padding-left: 0; margin: 18px 0; font-size: 14px; }
+  ul.tree li { position: relative; padding: 3px 0 3px 18px; }
+  ul.tree li::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; border-left: 1px solid var(--border); }
+  ul.tree li::after { content: ""; position: absolute; left: 0; top: 17px; width: 14px; border-top: 1px solid var(--border); }
+  ul.tree li:last-child::before { bottom: auto; height: 17px; }
+  ul.tree > li { padding-left: 0; }
+  ul.tree > li::before, ul.tree > li::after { display: none; }
+  .st { display: inline-block; background: var(--panel2); border: 1px solid var(--border); border-radius: 6px; padding: 2px 9px; font-weight: 600; }
+  .st.root { border-color: var(--accent); }
+  .st.dead { border-color: var(--bad); }
+  .st.leaf { font-weight: 500; }
+  .sel { font-size: 11.5px; color: var(--purple); margin-left: 6px; }
+  .cond { font-size: 12.5px; color: var(--warn); margin-left: 6px; }
+  .tsk { font-size: 12.5px; color: var(--good); margin-left: 6px; }
+  .trn { display: block; font-size: 12.5px; color: var(--muted); margin-left: 10px; }
+  .trn b { color: var(--accent); font-weight: 600; }
+  .legend span { margin-right: 18px; font-size: 13px; }
+  .num { color: var(--muted); font-size: 12px; margin-right: 4px; }
+
+  /* ---------- Language switch / Chuyển ngôn ngữ ---------- */
+  #lang { position: fixed; top: 12px; right: 16px; z-index: 10; display: flex; gap: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 4px; }
+  #lang button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 5px; cursor: pointer; }
+  #lang button.on { background: var(--accent); color: #0d1117; font-weight: 600; }
+  body.mode-en .vi { display: none !important; }
+  body.mode-vi .en { display: none !important; }
+  body.mode-both span.vi { display: block; }
+  body.mode-both .vi { color: var(--vi); }
+  /* inline pairs (short labels inside the tree diagram): keep on one line, "EN / VI" */
+  body.mode-both span.vi.i { display: inline; }
+  body.mode-both span.vi.i::before { content: " / "; color: var(--muted); }
+  body.mode-both h1 .vi, body.mode-both h2 .vi, body.mode-both h3 .vi, body.mode-both h4 .vi { font-size: 0.72em; font-weight: 500; margin-top: 2px; }
+  body.mode-both nav .vi { font-size: 12px; }
+  body.mode-both .flow .step small.vi, body.mode-both .map .card p.vi { color: var(--vi); opacity: .9; }
+  body.mode-both p.vi, body.mode-both ul.vi, body.mode-both ol.vi { margin-top: -6px; }
+  body.mode-both td span.vi, body.mode-both td ul.vi { margin-top: 4px; }
+  body.mode-vi .vi, body.mode-en .en { color: inherit; }
+  @media (max-width: 900px) { nav { display: none; } main { margin-left: 0; padding: 20px; } .map { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body class="mode-both">
+
+<style>
+  .svgwrap { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px; margin: 18px 0; overflow-x: auto; }
+  .svgwrap svg { display: block; width: 100%; min-width: 900px; height: auto; font-family: "Segoe UI", Roboto, sans-serif; }
+  .tag { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--border); margin-right: 4px; }
+  .tag.new { border-color: var(--good); color: var(--good); }
+  .tag.gone { border-color: var(--bad); color: var(--bad); }
+  .tag.chg { border-color: var(--warn); color: var(--warn); }
+  .statecard { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 4px 18px 10px; margin: 18px 0; }
+  .statecard h3 { margin-top: 14px; }
+  .statecard table { font-size: 14px; }
+  .statecard th { width: 170px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .two > div { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 6px 16px 12px; }
+  ol.notes > li { margin-bottom: 10px; }
+  @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+</style>
+
+<div id="lang">
+  <button data-mode="both">EN + VI</button>
+  <button data-mode="en">English</button>
+  <button data-mode="vi">Tiếng Việt</button>
+</div>
+
+<nav>
+  <h2><span class="en">Contents</span><span class="vi">Mục lục</span></h2>
+  <a href="#glance"><span class="en">0. At a glance</span><span class="vi">0. Tổng quan nhanh</span></a>
+  <a href="#data"><span class="en">1. Data the tree uses</span><span class="vi">1. Dữ liệu cây sử dụng</span></a>
+  <a href="#map"><span class="en">2. State map</span><span class="vi">2. Bản đồ state</span></a>
+  <a href="#states"><span class="en">3. State-by-state breakdown</span><span class="vi">3. Phân tích từng state</span></a>
+  <a class="sub" href="#s-root">Root</a>
+  <a class="sub" href="#s-idle">Idle</a>
+  <a class="sub" href="#s-wandering">Wandering / WanderingToLocation / Wait</a>
+  <a class="sub" href="#s-attacking">Attacking</a>
+  <a class="sub" href="#s-move">MoveToAttackRange</a>
+  <a class="sub" href="#s-turn">TurnToTarget</a>
+  <a class="sub" href="#s-begin">BeginAttack</a>
+  <a class="sub" href="#s-wait">Wait (Attacking)</a>
+  <a href="#bindings"><span class="en">4. All bindings</span><span class="vi">4. Toàn bộ binding</span></a>
+  <a href="#play"><span class="en">5. Play-through: blink behind the NPC</span><span class="vi">5. Diễn biến: blink ra sau NPC</span></a>
+  <a href="#compare"><span class="en">6. Current vs previous version</span><span class="vi">6. So sánh bản hiện tại và bản trước</span></a>
+  <a class="sub" href="#why-order"><span class="en">Why order changes behaviour</span><span class="vi">Vì sao thứ tự làm đổi hành vi</span></a>
+  <a href="#issues"><span class="en">7. Things to check in the current tree</span><span class="vi">7. Những điểm cần kiểm tra</span></a>
+  <a href="#notes"><span class="en">8. State Tree notes to remember</span><span class="vi">8. Ghi nhớ quan trọng về State Tree</span></a>
+  <a href="#source"><span class="en">9. How this was read</span><span class="vi">9. Cách đọc dữ liệu</span></a>
+</nav>
+
+<main>
+<h1><span class="en">ST_NPC: How the NPC State Tree Works</span><span class="vi">ST_NPC: State Tree của NPC hoạt động thế nào</span></h1>
+<p class="subtitle"><span class="en">Breakdown of <code>/Game/Characters/NPC/AI/ST_NPC</code> as saved on 2026-11-05 09:23, compared with the previous save (2026-11-04 17:52).</span><span class="vi">Phân tích <code>/Game/Characters/NPC/AI/ST_NPC</code> theo bản lưu lúc 09:23 ngày 05/11/2026, so sánh với bản lưu trước đó (17:52 ngày 04/11/2026).</span></p>
+
+<!-- ============================================================ -->
+<h2 id="glance"><span class="en">0. At a glance</span><span class="vi">0. Tổng quan nhanh</span></h2>
+<p class="en">The tree has two branches under <b>Root</b>. <b>Idle</b> makes the NPC wander around its starting location. <b>Attacking</b> makes it chase, turn toward and punch the player. A task on Root (<code>STT_GetPlayerInfo</code>) measures the distance to the player every tick, and the distance checks read that value.</p>
+<p class="vi">Cây có hai nhánh nằm dưới <b>Root</b>. <b>Idle</b> cho NPC đi lang thang quanh vị trí xuất phát. <b>Attacking</b> cho NPC đuổi theo, quay mặt về phía người chơi rồi đấm. Một task trên Root (<code>STT_GetPlayerInfo</code>) đo khoảng cách tới người chơi mỗi tick, và các điều kiện khoảng cách đọc giá trị đó.</p>
+
+<div class="flow">
+  <div class="step">Idle → Wandering<small class="en">walk to a random point, wait 0.5–1.5 s, repeat</small><small class="vi">đi tới điểm ngẫu nhiên, chờ 0.5–1.5 s, lặp lại</small></div>
+  <div class="arrow">⇄</div>
+  <div class="step">Attacking<small class="en">enter: player seen, or valid target closer than 1500</small><small class="vi">vào khi: thấy người chơi, hoặc target hợp lệ và gần hơn 1500</small><small class="en">leave: farther than 1500</small><small class="vi">rời khi: xa hơn 1500</small></div>
+</div>
+<div class="flow">
+  <div class="step">① MoveToAttackRange<small class="en">only if farther than AttackRange</small><small class="vi">chỉ khi xa hơn AttackRange</small></div>
+  <div class="arrow">→</div>
+  <div class="step">② TurnToTarget<small class="en">rotate until within 10°</small><small class="vi">xoay tới khi lệch ≤ 10°</small></div>
+  <div class="arrow">→</div>
+  <div class="step">③ BeginAttack<small class="en">play one attack montage</small><small class="vi">chơi một montage đánh</small></div>
+  <div class="arrow">→</div>
+  <div class="step">④ Wait<small class="en">0.2–0.8 s</small><small class="vi">0.2–0.8 s</small></div>
+  <div class="arrow">↺</div>
+  <div class="step">Attacking<small class="en">pick ① or ② again</small><small class="vi">chọn lại ① hoặc ②</small></div>
+</div>
+
+<div class="box tip"><b class="label"><span class="en">The one idea to take away</span><span class="vi">Ý chính cần nhớ</span></b>
+<span class="en">Inside <b>Attacking</b>, the <i>order</i> of the four children is part of the logic. Each time the tree enters Attacking, it tries the children from top to bottom and takes the first one whose enter conditions pass. Every "Next State" transition also goes to whichever state sits next in the list. If you move a state, both of these change. Section 6 shows exactly what changed between your two versions.</span>
+<span class="vi">Bên trong <b>Attacking</b>, <i>thứ tự</i> của bốn state con là một phần của logic. Mỗi lần cây vào Attacking, nó thử các state con từ trên xuống dưới và chọn state đầu tiên có enter condition thoả mãn. Mọi transition "Next State" cũng đi tới state đang đứng kế tiếp trong danh sách. Khi bạn kéo đổi chỗ một state, cả hai điều này đều thay đổi. Mục 6 chỉ rõ những gì đã thay đổi giữa hai phiên bản của bạn.</span>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="data"><span class="en">1. Data the tree uses</span><span class="vi">1. Dữ liệu cây sử dụng</span></h2>
+
+<h3>Context</h3>
+<p class="en">The schema is <b>StateTree AI Component</b>, with <b>AIController Class</b> = <code>AIC_GAS-NPC</code> and <b>Context Actor Class</b> = <code>BP_GAS-NPC</code>. Because of these two classes, the binding menus show the variables of your own controller and NPC.</p>
+<p class="vi">Schema là <b>StateTree AI Component</b>, với <b>AIController Class</b> = <code>AIC_GAS-NPC</code> và <b>Context Actor Class</b> = <code>BP_GAS-NPC</code>. Nhờ hai class này mà menu binding hiển thị các biến của controller và NPC của bạn.</p>
+<table>
+<tr><th><span class="en">Source</span><span class="vi">Nguồn</span></th><th><span class="en">Value used by the tree</span><span class="vi">Giá trị cây dùng</span></th><th><span class="en">Where it comes from</span><span class="vi">Đến từ đâu</span></th></tr>
+<tr><td>Context → AIController</td><td><code>TargetActor</code></td><td><span class="en">Set by <code>AIC_GAS-NPC</code> in On Target Perception Updated when sight succeeds. It is never cleared (the False pin isn't connected).</span><span class="vi">Được <code>AIC_GAS-NPC</code> gán trong On Target Perception Updated khi nhìn thấy. Nó không bao giờ bị xoá (chân False chưa được nối).</span></td></tr>
+<tr><td>Context → Actor</td><td><code>StartingLocation</code></td><td><span class="en">Variable on <code>BP_GAS-NPC</code> (the wander center).</span><span class="vi">Biến trên <code>BP_GAS-NPC</code> (tâm vùng đi lang thang).</span></td></tr>
+<tr><td>Context → Actor</td><td><code>AttackRange</code> = <b>500</b></td><td><span class="en">Default on <code>BP_GAS-NPC</code>. The value on the NPC placed in the level wins if you changed it there.</span><span class="vi">Giá trị mặc định trên <code>BP_GAS-NPC</code>. Nếu bạn đã sửa trên NPC đặt trong level thì giá trị đó được dùng.</span></td></tr>
+</table>
+
+<h3>Parameters <span class="en">(Root)</span><span class="vi">(Root)</span></h3>
+<table>
+<tr><th><span class="en">Parameter</span><span class="vi">Parameter</span></th><th><span class="en">Value</span><span class="vi">Giá trị</span></th><th><span class="en">Used by</span><span class="vi">Được dùng bởi</span></th></tr>
+<tr><td><code>AggroDistance</code></td><td>1000</td><td><span class="en"><b>Nothing.</b> No binding uses it (see section 7).</span><span class="vi"><b>Không có gì.</b> Không binding nào dùng nó (xem mục 7).</span></td></tr>
+<tr><td><code>LeashDistance</code></td><td>1500</td><td><span class="en">Idle's On Tick transition (enter combat) and Attacking's On Tick transition (leave combat).</span><span class="vi">Transition On Tick của Idle (vào chiến đấu) và transition On Tick của Attacking (rời chiến đấu).</span></td></tr>
+</table>
+
+<h3><span class="en">Task on Root: STT_GetPlayerInfo</span><span class="vi">Task trên Root: STT_GetPlayerInfo</span></h3>
+<p class="en">Runs for the whole life of the tree and never calls Finish Task, so it never ends Root. Each tick it writes three Outputs: <code>TargetIsPlayer</code> (Pawn), <code>TargetPlayerLocation</code> and <code>DistanceToTarget</code>. Only <code>DistanceToTarget</code> is bound, in three places. Because the task sits on Root, every state below can bind to its outputs.</p>
+<p class="vi">Chạy suốt vòng đời của cây và không gọi Finish Task, nên không bao giờ làm Root kết thúc. Mỗi tick nó ghi ba Output: <code>TargetIsPlayer</code> (Pawn), <code>TargetPlayerLocation</code> và <code>DistanceToTarget</code>. Chỉ có <code>DistanceToTarget</code> được bind, ở ba chỗ. Vì task nằm trên Root nên mọi state bên dưới đều bind được vào output của nó.</p>
+
+<!-- ============================================================ -->
+<h2 id="map"><span class="en">2. State map</span><span class="vi">2. Bản đồ state</span></h2>
+<p class="en">Boxes inside boxes are parent → child. Circled numbers are the order in which a parent tries its children. Arrows are transitions, colored by trigger.</p>
+<p class="vi">Hộp nằm trong hộp là quan hệ cha → con. Số trong vòng tròn là thứ tự state cha thử các state con. Mũi tên là transition, tô màu theo trigger.</p>
+
+<div class="svgwrap">
+<svg viewBox="0 0 1100 770" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6fd08c"/></marker>
+    <marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#ff7b7b"/></marker>
+    <marker id="aB" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#6cb6ff"/></marker>
+    <marker id="aO" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#f0a35e"/></marker>
+  </defs>
+  <style>
+    .box0 { fill: #181b22; stroke: #6cb6ff; stroke-width: 2; }
+    .box1 { fill: #1f232c; stroke: #3a4152; stroke-width: 1.5; }
+    .box2 { fill: #262b37; stroke: #3a4152; stroke-width: 1.2; }
+    .leaf { fill: #2b3140; stroke: #4a5266; stroke-width: 1.2; }
+    .leafA { fill: #2e2630; stroke: #8a4b55; stroke-width: 1.2; }
+    .t { fill: #d9dde6; font-size: 14px; font-weight: 600; }
+    .s { fill: #9aa3b5; font-size: 11.5px; }
+    .k { fill: #6fd08c; font-size: 11.5px; }
+    .c { fill: #ffcc66; font-size: 11.5px; }
+    .n { fill: #c39bff; font-size: 14px; font-weight: 700; }
+    .lg { font-size: 11px; }
+    .g { stroke: #6fd08c; stroke-width: 2; fill: none; }
+    .r { stroke: #ff7b7b; stroke-width: 2; fill: none; }
+    .b { stroke: #6cb6ff; stroke-width: 2; fill: none; }
+    .o { stroke: #f0a35e; stroke-width: 2.2; fill: none; }
+  </style>
+
+  <!-- Root -->
+  <rect class="box0" x="10" y="10" width="1080" height="750" rx="12"/>
+  <text class="t" x="28" y="36">Root</text>
+  <text class="k" x="78" y="36">Task: STT_GetPlayerInfo → DistanceToTarget (every tick, never finishes)</text>
+
+  <!-- Idle -->
+  <rect class="box1" x="40" y="60" width="400" height="480" rx="10"/>
+  <text class="n" x="56" y="86">①</text><text class="t" x="76" y="86">Idle</text>
+  <text class="s" x="118" y="86">no enter condition · no tasks</text>
+
+  <!-- Wandering -->
+  <rect class="box2" x="70" y="104" width="350" height="410" rx="9"/>
+  <text class="n" x="84" y="128">①</text><text class="t" x="104" y="128">Wandering</text>
+  <text class="s" x="190" y="128">no tasks</text>
+
+  <rect class="leaf" x="95" y="145" width="300" height="105" rx="8"/>
+  <text class="n" x="107" y="168">①</text><text class="t" x="127" y="168">WanderingToLocation</text>
+  <text class="k" x="107" y="190">STT_Wandering (StartingLocation ← Actor)</text>
+  <text class="k" x="107" y="208">STT_SetSpeed  Speed = 300</text>
+  <text class="s" x="107" y="232">finishes when the move ends (ok or fail)</text>
+
+  <rect class="leaf" x="95" y="330" width="300" height="90" rx="8"/>
+  <text class="n" x="107" y="353">②</text><text class="t" x="127" y="353">Wait</text>
+  <text class="k" x="107" y="375">Delay 1.0 s ± 0.5</text>
+
+  <path class="b" d="M245,250 V328" marker-end="url(#aB)"/>
+  <text class="s" x="252" y="292">Completed → Next State (= Wait)</text>
+
+  <path class="b" d="M95,400 H60 V96 H70" marker-end="url(#aB)"/>
+  <text class="s" x="54" y="300" transform="rotate(-90 54 300)">Completed → Idle (re-select from ①)</text>
+
+  <text class="s" x="84" y="500">Wandering: Completed → Idle (backup only)</text>
+
+  <!-- Attacking -->
+  <rect class="box1" x="640" y="60" width="430" height="640" rx="10"/>
+  <text class="n" x="656" y="86">②</text><text class="t" x="676" y="86">Attacking</text>
+  <text class="c" x="756" y="86">Enter: AIController.TargetActor is valid</text>
+  <text class="s" x="656" y="106">no tasks · children tried top → bottom</text>
+
+  <rect class="leafA" x="670" y="120" width="340" height="105" rx="8"/>
+  <text class="n" x="682" y="143">①</text><text class="t" x="702" y="143">MoveToAttackRange</text>
+  <text class="c" x="682" y="164">Enter: DistanceToTarget &gt; AttackRange (500)</text>
+  <text class="k" x="682" y="184">STT_SetSpeed (Speed = 600, BP default)</text>
+  <text class="k" x="682" y="202">Move To → TargetActor, radius = AttackRange</text>
+
+  <rect class="leafA" x="670" y="275" width="340" height="105" rx="8"/>
+  <text class="n" x="682" y="298">②</text><text class="t" x="702" y="298">TurnToTarget</text>
+  <text class="c" x="682" y="319">no enter condition (the fallback child)</text>
+  <text class="k" x="682" y="339">STT_TurnToTarget (300°/s, finish ≤ 10°)</text>
+  <text class="k" x="682" y="357">Move To → TargetActor, radius = 5 (not bound)</text>
+
+  <rect class="leafA" x="670" y="430" width="340" height="85" rx="8"/>
+  <text class="n" x="682" y="453">③</text><text class="t" x="702" y="453">BeginAttack</text>
+  <text class="k" x="682" y="475">STT_Attacking → one Attack montage</text>
+  <text class="s" x="682" y="495">finishes on AttackFinished</text>
+
+  <rect class="leafA" x="670" y="565" width="340" height="80" rx="8"/>
+  <text class="n" x="682" y="588">④</text><text class="t" x="702" y="588">Wait</text>
+  <text class="k" x="682" y="610">Delay 0.5 s ± 0.3</text>
+
+  <path class="g" d="M800,225 V273" marker-end="url(#aG)"/>
+  <text class="s" x="808" y="254">Succeeded → Next State (= TurnToTarget)</text>
+  <path class="g" d="M800,380 V428" marker-end="url(#aG)"/>
+  <text class="s" x="808" y="409">Succeeded → Next State (= BeginAttack)</text>
+  <path class="g" d="M800,515 V563" marker-end="url(#aG)"/>
+  <text class="s" x="808" y="544">Succeeded → Next State (= Wait)</text>
+
+  <path class="b" d="M1010,605 H1052 V70 H1000" marker-end="url(#aB)"/>
+  <text class="s" x="1062" y="460" transform="rotate(-90 1062 460)">Wait: Completed → Attacking (re-select from ①)</text>
+
+  <path class="r" d="M1010,330 H1030 V96 H1000" marker-end="url(#aR)"/>
+  <text class="s" x="1024" y="250" transform="rotate(-90 1024 250)">Failed → Attacking</text>
+
+  <text class="s" x="656" y="672">Attacking: Completed → Attacking · Failed → Root</text>
+  <text class="s" x="656" y="689">(Failed → Root is never reached, see section 7)</text>
+
+  <!-- Idle <-> Attacking -->
+  <path class="o" d="M440,140 H638" marker-end="url(#aO)"/>
+  <text class="s" x="452" y="118" style="fill:#f0a35e">On Event AI.Event.Attacking</text>
+  <text class="s" x="452" y="133" style="fill:#f0a35e">On Tick [Dist &lt; 1500]</text>
+  <text class="s" x="452" y="158" style="fill:#f0a35e">(both need TargetActor valid)</text>
+
+  <path class="o" d="M640,300 H442" marker-end="url(#aO)" style="stroke:#ff9a5e"/>
+  <text class="s" x="452" y="292" style="fill:#ff9a5e">On Tick, Priority HIGH [Dist &gt; 1500]</text>
+
+  <path class="r" d="M670,190 H442" marker-end="url(#aR)"/>
+  <text class="s" x="452" y="182" style="fill:#ff7b7b">MoveToAttackRange: Failed → Idle</text>
+
+  <!-- Legend -->
+  <rect x="40" y="560" width="400" height="180" rx="8" fill="#14161b" stroke="#2e3340"/>
+  <text class="t" x="56" y="584">Legend</text>
+  <line class="g" x1="56" y1="606" x2="96" y2="606" marker-end="url(#aG)"/><text class="s lg" x="106" y="610">On State Succeeded</text>
+  <line class="r" x1="56" y1="628" x2="96" y2="628" marker-end="url(#aR)"/><text class="s lg" x="106" y="632">On State Failed</text>
+  <line class="b" x1="56" y1="650" x2="96" y2="650" marker-end="url(#aB)"/><text class="s lg" x="106" y="654">On State Completed (success OR failure)</text>
+  <line class="o" x1="56" y1="672" x2="96" y2="672" marker-end="url(#aO)"/><text class="s lg" x="106" y="676">On Event / On Tick (checked every tick)</text>
+  <text class="n" x="56" y="700">①②</text><text class="s lg" x="106" y="700">order a parent tries its children</text>
+  <text class="c lg" x="56" y="720">yellow</text><text class="s lg" x="106" y="720">= condition · </text><text class="k lg" x="180" y="720">green = task</text>
+</svg>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="states"><span class="en">3. State-by-state breakdown</span><span class="vi">3. Phân tích từng state</span></h2>
+<p class="en">All states use the default selection behaviour <b>Try Select Children In Order</b> and the default task completion <b>Any</b>. "Any" means the state finishes as soon as <i>one</i> of its tasks (with Considered for Completion on) calls Finish Task.</p>
+<p class="vi">Mọi state đều dùng kiểu chọn mặc định <b>Try Select Children In Order</b> và kiểu hoàn thành task mặc định <b>Any</b>. "Any" nghĩa là state kết thúc ngay khi <i>một</i> task bất kỳ của nó (có bật Considered for Completion) gọi Finish Task.</p>
+
+<div class="statecard" id="s-root">
+<h3>Root</h3>
+<table>
+<tr><th><span class="en">Role</span><span class="vi">Vai trò</span></th><td><span class="en">Starting point. Holds the data task that the whole tree reads from.</span><span class="vi">Điểm khởi đầu. Giữ task cung cấp dữ liệu cho toàn bộ cây.</span></td></tr>
+<tr><th>Tasks</th><td><code>STT_GetPlayerInfo</code></td></tr>
+<tr><th>Children</th><td>① Idle, ② Attacking</td></tr>
+<tr><th>Transitions</th><td><span class="en">None</span><span class="vi">Không có</span></td></tr>
+<tr><th><span class="en">How it connects</span><span class="vi">Cách kết nối</span></th><td><span class="en">When the tree starts, Root tries Idle first. Idle has no enter condition, so the NPC <b>always starts wandering</b>. Attacking is only reached through a transition.</span><span class="vi">Khi cây khởi động, Root thử Idle trước. Idle không có enter condition, nên NPC <b>luôn bắt đầu bằng việc đi lang thang</b>. Attacking chỉ được vào thông qua transition.</span></td></tr>
+</table>
+</div>
+
+<div class="statecard" id="s-idle">
+<h3>① Idle</h3>
+<table>
+<tr><th><span class="en">Role</span><span class="vi">Vai trò</span></th><td><span class="en">"Not fighting" group. Its only job is to watch for a reason to start fighting.</span><span class="vi">Nhóm "không chiến đấu". Việc duy nhất của nó là theo dõi lý do để bắt đầu chiến đấu.</span></td></tr>
+<tr><th>Enter conditions</th><td><span class="en">None</span><span class="vi">Không có</span></td></tr>
+<tr><th>Tasks</th><td><span class="en">None</span><span class="vi">Không có</span></td></tr>
+<tr><th>Transitions</th><td>
+<span class="en">1. <b>On Event</b> <code>AI.Event.Attacking</code> → <b>Attacking</b>, if <code>TargetActor</code> is valid.<br>2. <b>On Tick</b> → <b>Attacking</b>, if <code>TargetActor</code> is valid <b>AND</b> <code>DistanceToTarget</code> &lt; <code>LeashDistance</code> (1500).</span>
+<span class="vi">1. <b>On Event</b> <code>AI.Event.Attacking</code> → <b>Attacking</b>, nếu <code>TargetActor</code> hợp lệ.<br>2. <b>On Tick</b> → <b>Attacking</b>, nếu <code>TargetActor</code> hợp lệ <b>VÀ</b> <code>DistanceToTarget</code> &lt; <code>LeashDistance</code> (1500).</span></td></tr>
+<tr><th><span class="en">How it connects</span><span class="vi">Cách kết nối</span></th><td><span class="en">Because these transitions sit on the <i>parent</i>, they are checked every tick while <i>any</i> child (Wandering, WanderingToLocation, Wait) is active. The event gives an instant reaction the first time the NPC sees you. The tick transition handles re-entering combat later, for example after the leash sent the NPC home while you were still in view.</span><span class="vi">Vì các transition này nằm trên state <i>cha</i>, chúng được kiểm tra mỗi tick khi <i>bất kỳ</i> state con nào (Wandering, WanderingToLocation, Wait) đang active. Event giúp NPC phản ứng ngay lần đầu thấy bạn. Transition tick xử lý việc quay lại chiến đấu sau đó, ví dụ khi leash đã đưa NPC về trong lúc bạn vẫn nằm trong tầm nhìn.</span></td></tr>
+</table>
+</div>
+
+<div class="statecard" id="s-wandering">
+<h3>Wandering → ① WanderingToLocation → ② Wait</h3>
+<table>
+<tr><th><span class="en">Role</span><span class="vi">Vai trò</span></th><td><span class="en">The wander loop: walk to a random point, pause, repeat.</span><span class="vi">Vòng lặp đi lang thang: đi tới một điểm ngẫu nhiên, dừng lại, lặp lại.</span></td></tr>
+<tr><th>WanderingToLocation</th><td><span class="en">Tasks: <code>STT_Wandering</code> (<code>StartingLocation</code> ← Actor) and <code>STT_SetSpeed</code> = 300. STT_Wandering calls Finish Task (true) when the move succeeds and (false) when it fails. Transition: <b>On State Completed → Next State</b>, which is Wait.</span><span class="vi">Task: <code>STT_Wandering</code> (<code>StartingLocation</code> ← Actor) và <code>STT_SetSpeed</code> = 300. STT_Wandering gọi Finish Task (true) khi di chuyển thành công và (false) khi thất bại. Transition: <b>On State Completed → Next State</b>, tức là Wait.</span></td></tr>
+<tr><th>Wait</th><td><span class="en">Task: Delay 1.0 s ± 0.5. Transition: <b>On State Completed → Idle</b>. Idle then re-selects from the top, and the loop starts again.</span><span class="vi">Task: Delay 1.0 s ± 0.5. Transition: <b>On State Completed → Idle</b>. Sau đó Idle chọn lại từ đầu và vòng lặp bắt đầu lại.</span></td></tr>
+<tr><th>Wandering</th><td><span class="en">No tasks. Transition <b>On State Completed → Idle</b>. It's a safety net only: completions are handled by the children first, so it rarely fires.</span><span class="vi">Không có task. Transition <b>On State Completed → Idle</b>. Chỉ là lưới an toàn: các state con xử lý việc hoàn thành trước nên nó hiếm khi được kích hoạt.</span></td></tr>
+<tr><th><span class="en">Why "Completed"</span><span class="vi">Vì sao dùng "Completed"</span></th><td><span class="en">Completed covers both success and failure. If the random point is unreachable, the NPC still goes to Wait instead of freezing.</span><span class="vi">Completed bao gồm cả thành công lẫn thất bại. Nếu điểm ngẫu nhiên không tới được, NPC vẫn sang Wait thay vì bị đứng im.</span></td></tr>
+</table>
+</div>
+
+<div class="statecard" id="s-attacking">
+<h3>② Attacking</h3>
+<table>
+<tr><th><span class="en">Role</span><span class="vi">Vai trò</span></th><td><span class="en">The combat group. Decides when combat starts and ends; its children decide what to do inside it.</span><span class="vi">Nhóm chiến đấu. Quyết định khi nào bắt đầu và kết thúc chiến đấu; các state con quyết định làm gì bên trong.</span></td></tr>
+<tr><th>Enter conditions</th><td><span class="en">Object Is Valid (<code>AIController.TargetActor</code>)</span><span class="vi">Object Is Valid (<code>AIController.TargetActor</code>)</span></td></tr>
+<tr><th>Tasks</th><td><span class="en">None</span><span class="vi">Không có</span></td></tr>
+<tr><th>Transitions</th><td>
+<span class="en">1. <b>On Tick, Priority High</b> → <b>Idle</b>, if <code>DistanceToTarget</code> &gt; <code>LeashDistance</code> (1500). This is the leash.<br>2. <b>On State Completed</b> → <b>Attacking</b> (restart combat).<br>3. <b>On State Failed</b> → <b>Root</b>.</span>
+<span class="vi">1. <b>On Tick, Priority High</b> → <b>Idle</b>, nếu <code>DistanceToTarget</code> &gt; <code>LeashDistance</code> (1500). Đây là leash (dây xích).<br>2. <b>On State Completed</b> → <b>Attacking</b> (bắt đầu lại chiến đấu).<br>3. <b>On State Failed</b> → <b>Root</b>.</span></td></tr>
+<tr><th>Children</th><td>① MoveToAttackRange, ② TurnToTarget, ③ BeginAttack, ④ Wait</td></tr>
+<tr><th><span class="en">How it connects</span><span class="vi">Cách kết nối</span></th><td><span class="en">The leash is on the parent with High priority, so it can interrupt any child, even in the middle of a punch. When it fires, every active task gets ExitState: Move To stops, and <code>STT_Attacking</code> stops the montage.</span><span class="vi">Leash nằm trên state cha với priority High, nên nó có thể ngắt bất kỳ state con nào, kể cả khi đang đấm. Khi nó kích hoạt, mọi task đang active nhận ExitState: Move To dừng lại, và <code>STT_Attacking</code> dừng montage.</span></td></tr>
+</table>
+</div>
+
+<div class="statecard" id="s-move">
+<h3>① MoveToAttackRange</h3>
+<table>
+<tr><th><span class="en">Role</span><span class="vi">Vai trò</span></th><td><span class="en">Chase. Used only when the player is too far to start an attack.</span><span class="vi">Đuổi theo. Chỉ dùng khi người chơi ở quá xa để bắt đầu đánh.</span></td></tr>
+<tr><th>Enter conditions</th><td><code>DistanceToTarget</code> &gt; <code>AttackRange</code> (Actor, 500)</td></tr>
+<tr><th>Tasks</th><td><span class="en"><code>STT_SetSpeed</code> (Speed not set in the tree, so the Blueprint default <b>600</b> is used).<br><b>Move To</b>: TargetActor ← <code>AIController.TargetActor</code>, AcceptableRadius ← <code>AttackRange</code>, Track Moving Goal on.</span><span class="vi"><code>STT_SetSpeed</code> (Speed không được đặt trong cây, nên dùng giá trị mặc định <b>600</b> của Blueprint).<br><b>Move To</b>: TargetActor ← <code>AIController.TargetActor</code>, AcceptableRadius ← <code>AttackRange</code>, bật Track Moving Goal.</span></td></tr>
+<tr><th>Transitions</th><td><span class="en"><b>Succeeded → Next State</b> (= TurnToTarget, because it's next in the list).<br><b>Failed → Idle</b>.</span><span class="vi"><b>Succeeded → Next State</b> (= TurnToTarget, vì nó đứng kế tiếp trong danh sách).<br><b>Failed → Idle</b>.</span></td></tr>
+<tr><th><span class="en">How it connects</span><span class="vi">Cách kết nối</span></th><td><span class="en">Being <b>first</b> with an enter condition makes it a question: "far away? then chase". If the condition fails, Attacking moves on to TurnToTarget.</span><span class="vi">Đứng <b>đầu tiên</b> và có enter condition khiến nó thành một câu hỏi: "ở xa à? vậy thì đuổi". Nếu điều kiện không thoả, Attacking chuyển sang thử TurnToTarget.</span></td></tr>
+</table>
+</div>
+
+<div class="statecard" id="s-turn">
+<h3>② TurnToTarget</h3>
+<table>
+<tr><th><span class="en">Role</span><span class="vi">Vai trò</span></th><td><span class="en">Face the player before every attack.</span><span class="vi">Quay mặt về phía người chơi trước mỗi đòn đánh.</span></td></tr>
+<tr><th>Enter conditions</th><td><span class="en">None. It's the fallback when MoveToAttackRange's condition fails.</span><span class="vi">Không có. Đây là lựa chọn dự phòng khi điều kiện của MoveToAttackRange không thoả.</span></td></tr>
+<tr><th>Tasks</th><td><span class="en"><b>STT_TurnToTarget</b>: Target ← <code>AIController.TargetActor</code>, TurnSpeed 300, AcceptableAngle 10 (Blueprint default). EnterState stops movement. Each tick it rotates the actor toward the target and calls Finish Task (true) once the yaw difference is ≤ 10°. If the target is invalid it calls Finish Task (false).<br><b>Move To</b>: TargetActor ← <code>TargetActor</code>, AcceptableRadius = <b>5</b> (typed in, not bound).</span><span class="vi"><b>STT_TurnToTarget</b>: Target ← <code>AIController.TargetActor</code>, TurnSpeed 300, AcceptableAngle 10 (mặc định của Blueprint). EnterState dừng di chuyển. Mỗi tick nó xoay actor về phía target và gọi Finish Task (true) khi độ lệch yaw ≤ 10°. Nếu target không hợp lệ thì gọi Finish Task (false).<br><b>Move To</b>: TargetActor ← <code>TargetActor</code>, AcceptableRadius = <b>5</b> (gõ tay, không bind).</span></td></tr>
+<tr><th>Transitions</th><td><span class="en"><b>Succeeded → Next State</b> (= BeginAttack).<br><b>Failed → Attacking</b> (re-select).</span><span class="vi"><b>Succeeded → Next State</b> (= BeginAttack).<br><b>Failed → Attacking</b> (chọn lại).</span></td></tr>
+<tr><th><span class="en">How it connects</span><span class="vi">Cách kết nối</span></th><td><span class="en">With completion "Any", whichever task finishes first ends the state. Usually the turn finishes first (180° at 300°/s takes 0.6 s). The Move To keeps walking the NPC toward you while it turns. Since AttackRange is 500, this Move To is what actually brings the NPC into punching distance (see section 7).</span><span class="vi">Với kiểu hoàn thành "Any", task nào xong trước sẽ kết thúc state. Thường thì việc xoay xong trước (180° với 300°/s mất 0.6 s). Move To vẫn tiếp tục đưa NPC đi về phía bạn trong lúc xoay. Vì AttackRange là 500, chính Move To này mới đưa NPC vào tầm đấm (xem mục 7).</span></td></tr>
+</table>
+</div>
+
+<div class="statecard" id="s-begin">
+<h3>③ BeginAttack</h3>
+<table>
+<tr><th><span class="en">Role</span><span class="vi">Vai trò</span></th><td><span class="en">One attack.</span><span class="vi">Một đòn đánh.</span></td></tr>
+<tr><th>Tasks</th><td><span class="en"><b>STT_Attacking</b>: EnterState binds AttackFinished, then calls <code>Attack</code> on the NPC. AttackFinished → Finish Task (true). ExitState unbinds all and calls Stop Anim Montage.</span><span class="vi"><b>STT_Attacking</b>: EnterState bind AttackFinished, rồi gọi <code>Attack</code> trên NPC. AttackFinished → Finish Task (true). ExitState unbind tất cả và gọi Stop Anim Montage.</span></td></tr>
+<tr><th>Transitions</th><td><span class="en"><b>Succeeded → Next State</b> (= Wait). There's no Failed transition here, so a failure goes up to Attacking's Completed → Attacking.</span><span class="vi"><b>Succeeded → Next State</b> (= Wait). Không có transition Failed ở đây, nên khi thất bại nó được đẩy lên Completed → Attacking của Attacking.</span></td></tr>
+<tr><th><span class="en">How it connects</span><span class="vi">Cách kết nối</span></th><td><span class="en">It can only be reached from TurnToTarget's success, so the NPC never attacks without turning first. The montage uses root motion, so the NPC can't turn while it plays.</span><span class="vi">Nó chỉ được vào sau khi TurnToTarget thành công, nên NPC không bao giờ đánh mà chưa quay mặt. Montage dùng root motion nên NPC không thể xoay trong lúc montage chạy.</span></td></tr>
+</table>
+</div>
+
+<div class="statecard" id="s-wait">
+<h3>④ Wait (Attacking)</h3>
+<table>
+<tr><th><span class="en">Role</span><span class="vi">Vai trò</span></th><td><span class="en">Short recovery after each attack, then decide again.</span><span class="vi">Nghỉ ngắn sau mỗi đòn đánh, rồi quyết định lại.</span></td></tr>
+<tr><th>Tasks</th><td>Delay 0.5 s ± 0.3</td></tr>
+<tr><th>Transitions</th><td><span class="en"><b>On State Completed → Attacking</b>.</span><span class="vi"><b>On State Completed → Attacking</b>.</span></td></tr>
+<tr><th><span class="en">How it connects</span><span class="vi">Cách kết nối</span></th><td><span class="en">Going to the <i>parent</i> makes Attacking choose its child again from ①. Far away: chase. Close: turn, then attack. This is the step that lets the NPC react after you blink behind it.</span><span class="vi">Đi tới state <i>cha</i> khiến Attacking chọn lại state con từ ①. Ở xa: đuổi theo. Ở gần: xoay rồi đánh. Đây là bước giúp NPC phản ứng sau khi bạn blink ra sau lưng nó.</span></td></tr>
+</table>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="bindings"><span class="en">4. All bindings</span><span class="vi">4. Toàn bộ binding</span></h2>
+<table>
+<tr><th><span class="en">Source</span><span class="vi">Nguồn</span></th><th><span class="en">Bound to</span><span class="vi">Được bind vào</span></th></tr>
+<tr><td>Context Actor → <code>StartingLocation</code></td><td>WanderingToLocation · STT_Wandering.StartingLocation</td></tr>
+<tr><td>Context AIController → <code>TargetActor</code></td><td>Idle · On Event transition · Object Is Valid.Object</td></tr>
+<tr><td>Context AIController → <code>TargetActor</code></td><td>Idle · On Tick transition · Object Is Valid.Object</td></tr>
+<tr><td>Context AIController → <code>TargetActor</code></td><td>Attacking · Enter condition · Object Is Valid.Object</td></tr>
+<tr><td>Context AIController → <code>TargetActor</code></td><td>MoveToAttackRange · Move To.TargetActor</td></tr>
+<tr><td>Context AIController → <code>TargetActor</code></td><td>TurnToTarget · STT_TurnToTarget.Target</td></tr>
+<tr><td>Context AIController → <code>TargetActor</code></td><td>TurnToTarget · Move To.TargetActor</td></tr>
+<tr><td>Context Actor → <code>AttackRange</code></td><td>MoveToAttackRange · Move To.AcceptableRadius</td></tr>
+<tr><td>Context Actor → <code>AttackRange</code></td><td>MoveToAttackRange · Enter condition Float Compare.Right</td></tr>
+<tr><td>STT_GetPlayerInfo → <code>DistanceToTarget</code></td><td>MoveToAttackRange · Enter condition Float Compare.Left</td></tr>
+<tr><td>STT_GetPlayerInfo → <code>DistanceToTarget</code></td><td>Idle · On Tick transition · Float Compare.Left (operator Less)</td></tr>
+<tr><td>Parameter <code>LeashDistance</code></td><td>Idle · On Tick transition · Float Compare.Right</td></tr>
+<tr><td>STT_GetPlayerInfo → <code>DistanceToTarget</code></td><td>Attacking · On Tick transition · Float Compare.Left (operator Greater)</td></tr>
+<tr><td>Parameter <code>LeashDistance</code></td><td>Attacking · On Tick transition · Float Compare.Right</td></tr>
+</table>
+<p class="en">Not bound, using the value typed in Details: TurnToTarget's Move To AcceptableRadius (5), STT_TurnToTarget TurnSpeed (300), the SetSpeed values, and the Delay durations.</p>
+<p class="vi">Không bind, dùng giá trị gõ trong Details: AcceptableRadius của Move To trong TurnToTarget (5), TurnSpeed của STT_TurnToTarget (300), các giá trị SetSpeed và thời gian của Delay.</p>
+
+<!-- ============================================================ -->
+<h2 id="play"><span class="en">5. Play-through: blink behind the NPC</span><span class="vi">5. Diễn biến: blink ra sau NPC</span></h2>
+<table>
+<tr><th>#</th><th><span class="en">What happens</span><span class="vi">Chuyện gì xảy ra</span></th><th><span class="en">Active path</span><span class="vi">Đường state active</span></th></tr>
+<tr><td>1</td><td><span class="en">NPC wanders. Perception sees you and sends <code>AI.Event.Attacking</code>; TargetActor is valid.</span><span class="vi">NPC đi lang thang. Perception thấy bạn và gửi <code>AI.Event.Attacking</code>; TargetActor hợp lệ.</span></td><td>Root › Idle › Wandering › WanderingToLocation</td></tr>
+<tr><td>2</td><td><span class="en">Idle's On Event transition fires. Attacking tries ①: you're 800 away, more than 500, so it chases at speed 600.</span><span class="vi">Transition On Event của Idle kích hoạt. Attacking thử ①: bạn cách 800, lớn hơn 500, nên NPC đuổi theo với tốc độ 600.</span></td><td>Root › Attacking › MoveToAttackRange</td></tr>
+<tr><td>3</td><td><span class="en">Move To reaches the radius and succeeds. Next State → TurnToTarget: NPC turns and keeps walking in.</span><span class="vi">Move To tới bán kính và thành công. Next State → TurnToTarget: NPC xoay và tiếp tục tiến lại gần.</span></td><td>Root › Attacking › TurnToTarget</td></tr>
+<tr><td>4</td><td><span class="en">Facing within 10°: Finish Task (true). Next State → BeginAttack: the punch plays.</span><span class="vi">Lệch dưới 10°: Finish Task (true). Next State → BeginAttack: cú đấm được thực hiện.</span></td><td>Root › Attacking › BeginAttack</td></tr>
+<tr><td>5</td><td><span class="en"><b>You blink behind the NPC.</b> The montage keeps playing (root motion, can't turn). Nothing interrupts it, because you're still within 1500.</span><span class="vi"><b>Bạn blink ra sau NPC.</b> Montage vẫn chạy tiếp (root motion, không xoay được). Không gì ngắt nó, vì bạn vẫn trong 1500.</span></td><td>Root › Attacking › BeginAttack</td></tr>
+<tr><td>6</td><td><span class="en">AttackFinished → Succeeded → Next State → Wait (0.2–0.8 s).</span><span class="vi">AttackFinished → Succeeded → Next State → Wait (0.2–0.8 s).</span></td><td>Root › Attacking › Wait</td></tr>
+<tr><td>7</td><td><span class="en">Wait completed → Attacking re-selects. You're behind it, closer than 500, so ① fails and ② TurnToTarget is selected. It turns about 180° in about 0.6 s.</span><span class="vi">Wait xong → Attacking chọn lại. Bạn ở sau lưng, gần hơn 500, nên ① không thoả và ② TurnToTarget được chọn. Nó xoay khoảng 180° trong khoảng 0.6 s.</span></td><td>Root › Attacking › TurnToTarget</td></tr>
+<tr><td>8</td><td><span class="en">Facing you → BeginAttack → punch. This is the behaviour you asked for.</span><span class="vi">Đã quay về phía bạn → BeginAttack → đấm. Đây là hành vi bạn mong muốn.</span></td><td>Root › Attacking › BeginAttack</td></tr>
+<tr><td>9</td><td><span class="en">You run past 1500. Attacking's High-priority On Tick fires → Idle. The montage stops in ExitState, speed goes back to 300 in WanderingToLocation.</span><span class="vi">Bạn chạy xa hơn 1500. On Tick priority High của Attacking kích hoạt → Idle. Montage dừng trong ExitState, tốc độ về 300 trong WanderingToLocation.</span></td><td>Root › Idle › Wandering › …</td></tr>
+<tr><td>10</td><td><span class="en">You walk back within 1500. Idle's On Tick (TargetActor still valid) → Attacking. No new perception event is needed.</span><span class="vi">Bạn đi lại vào trong 1500. On Tick của Idle (TargetActor vẫn hợp lệ) → Attacking. Không cần event perception mới.</span></td><td>Root › Attacking › …</td></tr>
+</table>
+
+<!-- ============================================================ -->
+<h2 id="compare"><span class="en">6. Current vs previous version</span><span class="vi">6. So sánh bản hiện tại và bản trước</span></h2>
+<p class="en">"Previous" is the last save before the current one: <code>Saved/Backup_2026-11-04_TurnToTarget/ST_NPC.uasset</code> (2026-11-04 17:52). "Current" is <code>Content/Characters/NPC/AI/ST_NPC.uasset</code> (2026-11-05 09:23).</p>
+<p class="vi">"Bản trước" là lần lưu ngay trước bản hiện tại: <code>Saved/Backup_2026-11-04_TurnToTarget/ST_NPC.uasset</code> (17:52 ngày 04/11/2026). "Bản hiện tại" là <code>Content/Characters/NPC/AI/ST_NPC.uasset</code> (09:23 ngày 05/11/2026).</p>
+
+<div class="two">
+<div>
+<h3><span class="en">Previous (17:52)</span><span class="vi">Bản trước (17:52)</span></h3>
+<ul class="tree">
+<li><span class="st root">Root</span><span class="tsk">GetPlayerInfo</span>
+<ul>
+<li><span class="st">Idle</span><span class="trn"><b>OnEvent</b> AI.Event.Attacking → Attacking</span>
+<ul>
+<li><span class="st leaf dead">Patroling</span><span class="cond">PatrolRoute valid</span></li>
+<li><span class="st">Wandering</span><span class="trn">WanderingToLocation → Wait → Idle</span></li>
+</ul></li>
+<li><span class="st">Attacking</span><span class="cond">TargetActor valid</span><span class="trn">Completed → Attacking · Failed → Root</span>
+<ul>
+<li><span class="num">①</span><span class="st leaf">MoveToAttackRange</span><span class="cond">no condition</span><span class="trn">Succeeded → <b>Next</b> (= BeginAttack) · Failed → Root</span></li>
+<li><span class="num">②</span><span class="st leaf">BeginAttack</span><span class="trn">Succeeded → <b>Next</b> (= Wait)</span></li>
+<li><span class="num">③</span><span class="st leaf">Wait</span><span class="trn">Succeeded → <b>Next</b> (= TurnToTarget)</span></li>
+<li><span class="num">④</span><span class="st leaf">TurnToTarget</span><span class="tsk">Move To (radius AttackRange) + Turn</span><span class="trn">Succeeded → Goto MoveToAttackRange</span></li>
+</ul></li>
+</ul></li>
+</ul>
+</div>
+<div>
+<h3><span class="en">Current (09:23)</span><span class="vi">Bản hiện tại (09:23)</span></h3>
+<ul class="tree">
+<li><span class="st root">Root</span><span class="tsk">GetPlayerInfo</span>
+<ul>
+<li><span class="st">Idle</span><span class="trn"><b>OnEvent</b> AI.Event.Attacking → Attacking<br><b>OnTick</b> valid &amp; Dist &lt; 1500 → Attacking</span>
+<ul>
+<li><span class="st">Wandering</span><span class="trn">WanderingToLocation → Wait → Idle</span></li>
+</ul></li>
+<li><span class="st">Attacking</span><span class="cond">TargetActor valid</span><span class="trn"><b>OnTick High</b> Dist &gt; 1500 → Idle · Completed → Attacking · Failed → Root</span>
+<ul>
+<li><span class="num">①</span><span class="st leaf">MoveToAttackRange</span><span class="cond">Dist &gt; AttackRange</span><span class="trn">Succeeded → <b>Next</b> (= TurnToTarget) · Failed → Idle</span></li>
+<li><span class="num">②</span><span class="st leaf">TurnToTarget</span><span class="tsk">Turn + Move To (radius 5)</span><span class="trn">Succeeded → <b>Next</b> (= BeginAttack) · Failed → Attacking</span></li>
+<li><span class="num">③</span><span class="st leaf">BeginAttack</span><span class="trn">Succeeded → <b>Next</b> (= Wait)</span></li>
+<li><span class="num">④</span><span class="st leaf">Wait</span><span class="trn">Completed → Goto Attacking</span></li>
+</ul></li>
+</ul></li>
+</ul>
+</div>
+</div>
+
+<h3><span class="en">Every difference</span><span class="vi">Mọi điểm khác nhau</span></h3>
+<table>
+<tr><th><span class="en">Where</span><span class="vi">Ở đâu</span></th><th><span class="en">Previous</span><span class="vi">Bản trước</span></th><th><span class="en">Current</span><span class="vi">Bản hiện tại</span></th><th><span class="en">Effect</span><span class="vi">Tác động</span></th></tr>
+<tr><td><span class="tag chg">order</span> Attacking children</td><td>Move → Begin → Wait → Turn</td><td>Move → Turn → Begin → Wait</td><td><span class="en">Turn now happens <b>before</b> every attack, not after the wait.</span><span class="vi">Việc xoay giờ xảy ra <b>trước</b> mỗi đòn đánh, không phải sau khi chờ.</span></td></tr>
+<tr><td><span class="tag new">new</span> MoveToAttackRange</td><td><span class="en">no enter condition</span><span class="vi">không có enter condition</span></td><td>Dist &gt; AttackRange</td><td><span class="en">When close, Attacking skips the chase and falls through to TurnToTarget.</span><span class="vi">Khi ở gần, Attacking bỏ qua việc đuổi và chuyển xuống TurnToTarget.</span></td></tr>
+<tr><td><span class="tag chg">changed</span> MoveToAttackRange Failed</td><td>→ Root</td><td>→ Idle</td><td><span class="en">Same result in practice (Root picks Idle first), but clearer.</span><span class="vi">Kết quả thực tế giống nhau (Root chọn Idle trước), nhưng rõ ràng hơn.</span></td></tr>
+<tr><td><span class="tag chg">changed</span> TurnToTarget</td><td><span class="en">Move To (radius = AttackRange) listed first, then Turn. Succeeded → Goto MoveToAttackRange. No Failed.</span><span class="vi">Move To (bán kính = AttackRange) đứng trước, rồi tới Turn. Succeeded → Goto MoveToAttackRange. Không có Failed.</span></td><td><span class="en">Turn listed first, then Move To (radius 5, unbound). Succeeded → Next (BeginAttack). Failed → Attacking.</span><span class="vi">Turn đứng trước, rồi Move To (bán kính 5, không bind). Succeeded → Next (BeginAttack). Failed → Attacking.</span></td><td><span class="en">Before, Move To succeeded at once when you were close and ended the state before the NPC turned. Now the Move To can't finish instantly, so the turn finishes first.</span><span class="vi">Trước đây, Move To thành công ngay khi bạn ở gần và kết thúc state trước khi NPC xoay. Giờ Move To không thể xong ngay, nên việc xoay xong trước.</span></td></tr>
+<tr><td><span class="tag chg">changed</span> Wait (Attacking)</td><td>Succeeded → Next (= TurnToTarget)</td><td>Completed → Goto Attacking</td><td><span class="en">Re-selects from ①, so the NPC chases again if you moved away.</span><span class="vi">Chọn lại từ ①, nên NPC đuổi lại nếu bạn đã đi xa.</span></td></tr>
+<tr><td><span class="tag new">new</span> Attacking</td><td>—</td><td>On Tick High: Dist &gt; 1500 → Idle</td><td><span class="en">Leash: the NPC gives up and goes back to wandering.</span><span class="vi">Leash: NPC bỏ cuộc và quay lại đi lang thang.</span></td></tr>
+<tr><td><span class="tag new">new</span> Idle</td><td>—</td><td>On Tick: valid &amp; Dist &lt; 1500 → Attacking</td><td><span class="en">NPC can re-enter combat without a new perception event.</span><span class="vi">NPC có thể quay lại chiến đấu mà không cần event perception mới.</span></td></tr>
+<tr><td><span class="tag gone">removed</span> Patroling</td><td><span class="en">first child of Idle, needs PatrolRoute</span><span class="vi">state con đầu của Idle, cần PatrolRoute</span></td><td>—</td><td><span class="en">No effect in play (it was skipped when PatrolRoute was empty). See the compile note in section 7.</span><span class="vi">Không ảnh hưởng khi chơi (nó bị bỏ qua khi PatrolRoute trống). Xem ghi chú về compile ở mục 7.</span></td></tr>
+</table>
+
+<h3 id="why-order"><span class="en">Why changing the order changes the NPC's logic</span><span class="vi">Vì sao đổi thứ tự lại làm thay đổi logic của NPC</span></h3>
+<p class="en">Order matters in three separate ways in your tree.</p>
+<p class="vi">Trong cây của bạn, thứ tự quan trọng theo ba cách khác nhau.</p>
+
+<h4><span class="en">a) Selection: the first child whose conditions pass wins</span><span class="vi">a) Chọn state: state con đầu tiên thoả điều kiện sẽ thắng</span></h4>
+<p class="en">When the tree enters Attacking, it walks the children top to bottom and stops at the first one it can enter. The order works like an <code>if / else if / else</code> chain:</p>
+<p class="vi">Khi cây vào Attacking, nó duyệt các state con từ trên xuống và dừng ở state đầu tiên vào được. Thứ tự hoạt động như một chuỗi <code>if / else if / else</code>:</p>
+<pre><code>// Current                                   // Previous
+if (Dist &gt; AttackRange)  MoveToAttackRange    MoveToAttackRange   // no condition: ALWAYS picked
+else                     TurnToTarget         // the other three were never selected directly</code></pre>
+<p class="en">Previously MoveToAttackRange had no condition and was first, so <i>every</i> entry into Attacking started with a Move To. When you were close, that Move To succeeded on its first frame, and the NPC went straight into BeginAttack facing the wrong way. If you swapped TurnToTarget and BeginAttack in the current tree, the close-range fallback would become BeginAttack, and the NPC would attack without turning again.</p>
+<p class="vi">Trước đây MoveToAttackRange không có điều kiện và đứng đầu, nên <i>mỗi</i> lần vào Attacking đều bắt đầu bằng Move To. Khi bạn ở gần, Move To đó thành công ngay frame đầu, và NPC đi thẳng vào BeginAttack trong khi đang quay sai hướng. Nếu bạn đổi chỗ TurnToTarget và BeginAttack trong cây hiện tại, lựa chọn dự phòng ở cự ly gần sẽ thành BeginAttack, và NPC lại đánh mà không xoay.</p>
+
+<h4><span class="en">b) "Next State" follows the list, not the name</span><span class="vi">b) "Next State" đi theo danh sách, không theo tên</span></h4>
+<p class="en">A transition of type <b>Next State</b> means "the sibling directly below me". The file even still stores old names on these links: BeginAttack's link is saved with the name "TurnToTarget", and MoveToAttackRange's with "Root". Those names are ignored. At runtime the target is whatever is below. So dragging a state changes where three of your transitions go, without you touching them:</p>
+<p class="vi">Transition kiểu <b>Next State</b> nghĩa là "state anh em nằm ngay bên dưới tôi". File thậm chí vẫn lưu tên cũ trên các liên kết này: liên kết của BeginAttack được lưu với tên "TurnToTarget", còn của MoveToAttackRange là "Root". Những tên đó bị bỏ qua. Khi chạy, đích đến là state nằm bên dưới. Vì vậy kéo đổi chỗ một state sẽ thay đổi đích của ba transition mà bạn không hề chạm vào:</p>
+<table>
+<tr><th>Transition</th><th><span class="en">Previous order</span><span class="vi">Thứ tự trước</span></th><th><span class="en">Current order</span><span class="vi">Thứ tự hiện tại</span></th></tr>
+<tr><td>MoveToAttackRange · Succeeded → Next</td><td>BeginAttack <span class="en">(attack without turning)</span><span class="vi">(đánh mà không xoay)</span></td><td>TurnToTarget</td></tr>
+<tr><td>BeginAttack · Succeeded → Next</td><td>Wait</td><td>Wait</td></tr>
+<tr><td>TurnToTarget · Succeeded</td><td>Goto MoveToAttackRange</td><td>Next → BeginAttack</td></tr>
+</table>
+<p class="en">That's why the old loop was <b>Move (instant) → Attack → Wait → Turn (cut short) → Move (instant) → Attack …</b>, and the new loop is <b>Turn → Attack → Wait → re-select</b>.</p>
+<p class="vi">Đó là lý do vòng lặp cũ là <b>Move (xong ngay) → Attack → Wait → Turn (bị cắt ngang) → Move (xong ngay) → Attack …</b>, còn vòng lặp mới là <b>Turn → Attack → Wait → chọn lại</b>.</p>
+
+<h4><span class="en">c) Task order inside a state</span><span class="vi">c) Thứ tự task bên trong một state</span></h4>
+<p class="en">Tasks get EnterState from top to bottom (and ExitState bottom to top). In the old TurnToTarget, Move To (radius = AttackRange) started first. When you were inside that radius it reported success immediately, and with completion "Any" that ended the state before the turn task ran a single tick. In the current version the turn task enters first and calls <i>Stop Movement Immediately</i>, but the Move To right below it starts a new move straight away, so that stop has no lasting effect. The turn still wins only because a 5 cm radius can't be reached instantly.</p>
+<p class="vi">Các task nhận EnterState từ trên xuống dưới (và ExitState từ dưới lên trên). Trong TurnToTarget cũ, Move To (bán kính = AttackRange) bắt đầu trước. Khi bạn ở trong bán kính đó, nó báo thành công ngay lập tức, và với kiểu hoàn thành "Any" điều đó kết thúc state trước khi task xoay chạy được một tick nào. Trong bản hiện tại, task xoay vào trước và gọi <i>Stop Movement Immediately</i>, nhưng Move To ngay bên dưới lập tức bắt đầu một lệnh di chuyển mới, nên lệnh dừng đó không có tác dụng lâu dài. Việc xoay vẫn thắng chỉ vì bán kính 5 cm không thể đạt tới ngay lập tức.</p>
+
+<!-- ============================================================ -->
+<h2 id="issues"><span class="en">7. Things to check in the current tree</span><span class="vi">7. Những điểm cần kiểm tra trong cây hiện tại</span></h2>
+
+<div class="box warn"><b class="label"><span class="en">1. The compiled data in the file is out of date</span><span class="vi">1. Dữ liệu đã compile trong file bị cũ</span></b>
+<span class="en">The file holds two copies of the tree: the editor version you see and the compiled version that runs. The compiled copy still contains <b>Patroling</b> (11 states), while the editor copy has 10. So the tree was edited after the last compile. Click <b>Compile</b> in the State Tree editor, then save, before testing.</span>
+<span class="vi">File chứa hai bản của cây: bản editor mà bạn nhìn thấy, và bản đã compile để chạy. Bản compile vẫn còn <b>Patroling</b> (11 state), trong khi bản editor có 10. Vậy là cây đã được sửa sau lần compile cuối. Hãy bấm <b>Compile</b> trong State Tree editor rồi lưu, trước khi test.</span>
+</div>
+
+<div class="box warn"><b class="label"><span class="en">2. AttackRange 500 is a chase distance, not a punch distance</span><span class="vi">2. AttackRange 500 là khoảng cách đuổi, không phải tầm đấm</span></b>
+<span class="en">MoveToAttackRange stops when the capsules are about 500 apart. The NPC only gets close enough to hit because the Move To inside TurnToTarget (radius 5) keeps walking in while it turns. That works, but it's hidden. If the turn finishes before the NPC arrives, it punches from too far away. A clearer setup: AttackRange ≈ 150, MoveToAttackRange's Move To radius ≈ AttackRange − 80 (the capsule radii are included in the test), and delete the Move To from TurnToTarget.</span>
+<span class="vi">MoveToAttackRange dừng khi hai capsule cách nhau khoảng 500. NPC chỉ đến đủ gần để đánh trúng là nhờ Move To trong TurnToTarget (bán kính 5) tiếp tục đi tới trong lúc xoay. Cách này chạy được nhưng bị ẩn. Nếu việc xoay xong trước khi NPC tới nơi, nó sẽ đấm từ quá xa. Cách thiết lập rõ ràng hơn: AttackRange ≈ 150, bán kính Move To của MoveToAttackRange ≈ AttackRange − 80 (phép kiểm tra có tính bán kính capsule), và xoá Move To khỏi TurnToTarget.</span>
+</div>
+
+<div class="box warn"><b class="label"><span class="en">3. Enter and leave use the same distance</span><span class="vi">3. Vào và rời dùng cùng một khoảng cách</span></b>
+<span class="en">Idle enters combat when Dist &lt; 1500, and Attacking leaves when Dist &gt; 1500. Standing right at 1500, the NPC can flip between the two every few ticks. <code>AggroDistance</code> (1000) exists but nothing uses it. Bind Idle's On Tick Float Compare <b>Right</b> to <code>AggroDistance</code> instead of <code>LeashDistance</code>.</span>
+<span class="vi">Idle vào chiến đấu khi Dist &lt; 1500, và Attacking rời khi Dist &gt; 1500. Đứng ngay tại 1500, NPC có thể đổi qua lại giữa hai trạng thái sau vài tick. <code>AggroDistance</code> (1000) có tồn tại nhưng không được dùng. Hãy bind <b>Right</b> của Float Compare trong On Tick của Idle vào <code>AggroDistance</code> thay vì <code>LeashDistance</code>.</span>
+</div>
+
+<div class="box"><b class="label"><span class="en">4. Attacking's "Failed → Root" never fires</span><span class="vi">4. "Failed → Root" của Attacking không bao giờ kích hoạt</span></b>
+<span class="en">Completed means success <i>or</i> failure, and transitions on one state are checked in list order. "Completed → Attacking" is listed first, so it also catches every failure. That's harmless here; just be aware the Failed row is dead.</span>
+<span class="vi">Completed nghĩa là thành công <i>hoặc</i> thất bại, và các transition trên cùng một state được kiểm tra theo thứ tự danh sách. "Completed → Attacking" đứng trước nên nó bắt luôn mọi thất bại. Ở đây không gây hại; chỉ cần biết dòng Failed là vô tác dụng.</span>
+</div>
+
+<div class="box"><b class="label"><span class="en">5. TargetActor is never cleared</span><span class="vi">5. TargetActor không bao giờ bị xoá</span></b>
+<span class="en">Once the NPC has seen you, it stays valid forever, so only distance decides. That fits the leash design. If you want "stop chasing when it can't see me", connect the perception Branch's False pin to <b>Set TargetActor</b> (None).</span>
+<span class="vi">Một khi NPC đã thấy bạn, nó hợp lệ mãi mãi, nên chỉ có khoảng cách quyết định. Điều này phù hợp với thiết kế leash. Nếu bạn muốn "ngừng đuổi khi không nhìn thấy tôi", hãy nối chân False của Branch perception vào <b>Set TargetActor</b> (None).</span>
+</div>
+
+<div class="box"><b class="label"><span class="en">6. Rotation and movement both turn the body</span><span class="vi">6. Cả xoay lẫn di chuyển đều làm thân xoay</span></b>
+<span class="en"><code>BP_GAS-NPC</code> keeps Orient Rotation to Movement on (from <code>CharacterBase.cpp</code>). While the Move To in TurnToTarget is walking, movement also rotates the body toward the velocity. That's usually toward you, so it mostly agrees with STT_TurnToTarget, but the two can fight on a curved path.</span>
+<span class="vi"><code>BP_GAS-NPC</code> vẫn bật Orient Rotation to Movement (từ <code>CharacterBase.cpp</code>). Khi Move To trong TurnToTarget đang đi, di chuyển cũng xoay thân về hướng vận tốc. Thường đó là hướng về phía bạn nên gần như khớp với STT_TurnToTarget, nhưng trên đường cong hai bên có thể giành nhau.</span>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="notes"><span class="en">8. State Tree notes to remember</span><span class="vi">8. Ghi nhớ quan trọng về State Tree</span></h2>
+
+<h3><span class="en">How states connect</span><span class="vi">Cách các state kết nối với nhau</span></h3>
+<ol class="notes en">
+<li><b>Active states form a path</b> from Root down to one leaf (e.g. Root › Attacking › TurnToTarget). Every state on that path is active, and all their tasks run at the same time. That's why a task on Root or on Attacking keeps working while the children change.</li>
+<li><b>Selection goes down, completion goes up.</b> Entering a parent selects a child (top to bottom, first whose enter conditions pass), and so on until a leaf. When a task finishes, the leaf completes, and transitions are looked for from that leaf up toward Root.</li>
+<li><b>If nobody handles a completion, the tree stops.</b> Give every leaf (or its parent) a transition for both outcomes. "On State Completed" covers both.</li>
+<li><b>Completion "Any":</b> the first task that finishes ends the state. Turn off <i>Considered for Completion</i> on helper tasks (Set Speed, Face Actor, a second Move To) that must not end the state.</li>
+<li><b>Next State</b> = sibling below. <b>Goto State</b> = a named state. <b>Goto a parent</b> = choose its children again (your "re-select" trick). Prefer Goto when the order might change.</li>
+<li><b>Going to a state that's already active doesn't restart it.</b> Its tasks get EnterState with ChangeType = <i>Sustained</i> instead of <i>Changed</i>. That's why the template tasks check <code>Transition.ChangeType == Changed</code>.</li>
+<li><b>Transition order and priority:</b> higher priority is checked first. At the same priority, the deepest state is checked first, and inside one state the list order decides. The first transition that passes wins.</li>
+<li><b>On Tick transitions run every frame.</b> Keep their conditions cheap, and use two different thresholds (enter vs leave) to avoid flickering.</li>
+<li><b>Enter conditions vs transition conditions:</b> enter conditions decide whether a state <i>can be selected</i>; transition conditions decide whether a transition <i>fires</i>. A failed enter condition makes the parent try the next child.</li>
+</ol>
+<ol class="notes vi">
+<li><b>Các state active tạo thành một đường</b> từ Root xuống một state lá (ví dụ Root › Attacking › TurnToTarget). Mọi state trên đường đó đều active, và tất cả task của chúng chạy cùng lúc. Vì vậy task trên Root hoặc trên Attacking vẫn tiếp tục chạy trong khi các state con thay đổi.</li>
+<li><b>Chọn state đi xuống, hoàn thành đi lên.</b> Vào một state cha thì chọn state con (từ trên xuống, state đầu tiên thoả enter condition), cứ thế cho tới state lá. Khi một task xong, state lá hoàn thành, và transition được tìm từ state lá đó đi ngược lên Root.</li>
+<li><b>Nếu không ai xử lý việc hoàn thành, cây sẽ dừng.</b> Hãy cho mỗi state lá (hoặc state cha của nó) một transition cho cả hai kết quả. "On State Completed" bao gồm cả hai.</li>
+<li><b>Kiểu hoàn thành "Any":</b> task đầu tiên xong sẽ kết thúc state. Hãy tắt <i>Considered for Completion</i> trên các task phụ (Set Speed, Face Actor, Move To thứ hai) không được phép kết thúc state.</li>
+<li><b>Next State</b> = state anh em bên dưới. <b>Goto State</b> = một state có tên. <b>Goto state cha</b> = chọn lại các state con (mẹo "chọn lại" của bạn). Nên dùng Goto khi thứ tự có thể thay đổi.</li>
+<li><b>Đi tới một state đang active không khởi động lại nó.</b> Task của nó nhận EnterState với ChangeType = <i>Sustained</i> thay vì <i>Changed</i>. Đó là lý do các task mẫu kiểm tra <code>Transition.ChangeType == Changed</code>.</li>
+<li><b>Thứ tự và priority của transition:</b> priority cao hơn được kiểm tra trước. Cùng priority thì state sâu nhất được kiểm tra trước, và trong một state thì thứ tự danh sách quyết định. Transition đầu tiên thoả mãn sẽ thắng.</li>
+<li><b>Transition On Tick chạy mỗi frame.</b> Giữ điều kiện của chúng nhẹ, và dùng hai ngưỡng khác nhau (vào và rời) để tránh nhấp nháy.</li>
+<li><b>Enter condition và transition condition khác nhau:</b> enter condition quyết định state <i>có được chọn hay không</i>; transition condition quyết định transition <i>có kích hoạt hay không</i>. Enter condition không thoả khiến state cha thử state con tiếp theo.</li>
+</ol>
+
+<h3><span class="en">Bindings</span><span class="vi">Binding</span></h3>
+<ol class="notes en">
+<li><b>Set the schema classes first</b> (AIController Class, Context Actor Class). Without them you can't bind to your own variables such as <code>TargetActor</code> or <code>AttackRange</code>.</li>
+<li><b>Blueprint task variable categories matter:</b> <i>Context</i> fills itself from the matching context type; <i>Input</i> must be bound; <i>Parameter</i> is a value you type (can also be bound); <i>Output</i> is data the task provides for others.</li>
+<li><b>You can bind to:</b> context, tree parameters, outputs of tasks on parent states, and outputs of tasks above in the same state. That's why <code>STT_GetPlayerInfo</code> sits on Root.</li>
+<li><b>A property without a binding uses the value typed in Details</b>, like the radius 5 on TurnToTarget's Move To. Check it whenever you duplicate a task.</li>
+<li><b>Renaming or deleting a variable or task asset breaks bindings</b> (shown in red, or silently removed). After renaming, re-open the tree, fix the red bindings and compile.</li>
+<li><b>Context variables must match the type.</b> A Context variable typed <code>BP_GAS-NPC</code> only fills in when the context actor is that class or a child of it.</li>
+</ol>
+<ol class="notes vi">
+<li><b>Đặt các class của schema trước tiên</b> (AIController Class, Context Actor Class). Thiếu chúng bạn không thể bind vào biến của mình như <code>TargetActor</code> hay <code>AttackRange</code>.</li>
+<li><b>Category của biến trong Blueprint task rất quan trọng:</b> <i>Context</i> tự điền từ context cùng kiểu; <i>Input</i> bắt buộc phải bind; <i>Parameter</i> là giá trị bạn gõ (cũng có thể bind); <i>Output</i> là dữ liệu task cung cấp cho nơi khác.</li>
+<li><b>Bạn có thể bind vào:</b> context, parameter của cây, output của task trên state cha, và output của task phía trên trong cùng state. Đó là lý do <code>STT_GetPlayerInfo</code> nằm trên Root.</li>
+<li><b>Thuộc tính không có binding sẽ dùng giá trị gõ trong Details</b>, như bán kính 5 trên Move To của TurnToTarget. Hãy kiểm tra mỗi khi bạn nhân bản một task.</li>
+<li><b>Đổi tên hoặc xoá biến hay asset task sẽ làm hỏng binding</b> (hiện màu đỏ, hoặc bị xoá âm thầm). Sau khi đổi tên, mở lại cây, sửa các binding đỏ và compile.</li>
+<li><b>Biến Context phải khớp kiểu.</b> Biến Context có kiểu <code>BP_GAS-NPC</code> chỉ được điền khi context actor là class đó hoặc class con của nó.</li>
+</ol>
+
+<h3><span class="en">Gameplay tags and events</span><span class="vi">Gameplay tag và event</span></h3>
+<ol class="notes en">
+<li><b>An On Event transition reacts to an event; "Required Event To Enter" only filters.</b> Required Event To Enter never starts a transition by itself. This is what blocked Attacking in an earlier version.</li>
+<li><b>Events live for one tick.</b> If no transition uses the event on that tick, it's gone. Perception only sends <code>AI.Event.Attacking</code> when sight is <i>gained</i>, so don't rely on it alone to re-enter combat. Your Idle On Tick transition covers that.</li>
+<li><b>The tag must exist in the project</b> (<code>Config/DefaultGameplayTags.ini</code>) and match exactly in both <code>AIC_GAS-NPC</code> (Send State Tree Event) and the tree.</li>
+<li><b>Consume Event On Select</b> (on by default) removes the event once a transition uses it, so other transitions in the same tick won't see it.</li>
+</ol>
+<ol class="notes vi">
+<li><b>Transition On Event phản ứng với event; "Required Event To Enter" chỉ dùng để lọc.</b> Required Event To Enter tự nó không bao giờ khởi động transition. Đây chính là thứ đã chặn Attacking trong một phiên bản trước.</li>
+<li><b>Event chỉ tồn tại trong một tick.</b> Nếu không có transition nào dùng event trong tick đó, nó biến mất. Perception chỉ gửi <code>AI.Event.Attacking</code> khi <i>bắt đầu</i> nhìn thấy, nên đừng chỉ dựa vào nó để quay lại chiến đấu. Transition On Tick của Idle đã lo việc đó.</li>
+<li><b>Tag phải tồn tại trong dự án</b> (<code>Config/DefaultGameplayTags.ini</code>) và khớp chính xác ở cả <code>AIC_GAS-NPC</code> (Send State Tree Event) và trong cây.</li>
+<li><b>Consume Event On Select</b> (bật mặc định) xoá event ngay khi một transition dùng nó, nên các transition khác trong cùng tick sẽ không thấy.</li>
+</ol>
+
+<h3><span class="en">Workflow</span><span class="vi">Quy trình làm việc</span></h3>
+<ol class="notes en">
+<li><b>Compile, then save.</b> The game runs the compiled copy. A tree that's saved but not compiled behaves like the old version (see section 7, item 1).</li>
+<li><b>Watch it run:</b> open the tree → Window → Debugger, record, then play. Scrub the timeline to see which state was active and which transition fired. Use <code>STT_Print</code> for quick on-screen messages.</li>
+<li><b>Change one thing at a time</b>, especially the order of states, and re-test the blink-behind case after each change.</li>
+<li><b>Commit when it works.</b> None of the AI work since commit <code>34c2d0c</code> is in git yet, and earlier working versions were already lost once.</li>
+</ol>
+<ol class="notes vi">
+<li><b>Compile rồi mới lưu.</b> Game chạy bản đã compile. Một cây được lưu mà chưa compile sẽ chạy như phiên bản cũ (xem mục 7, điểm 1).</li>
+<li><b>Quan sát cây chạy:</b> mở cây → Window → Debugger, bấm record, rồi play. Kéo timeline để xem state nào đã active và transition nào đã kích hoạt. Dùng <code>STT_Print</code> để in nhanh thông báo lên màn hình.</li>
+<li><b>Mỗi lần chỉ thay đổi một thứ</b>, đặc biệt là thứ tự các state, và test lại trường hợp blink ra sau lưng sau mỗi lần thay đổi.</li>
+<li><b>Commit khi đã chạy đúng.</b> Toàn bộ phần AI kể từ commit <code>34c2d0c</code> vẫn chưa có trong git, và các phiên bản chạy tốt trước đây đã từng bị mất một lần.</li>
+</ol>
+
+<!-- ============================================================ -->
+<h2 id="source"><span class="en">9. How this was read</span><span class="vi">9. Cách đọc dữ liệu</span></h2>
+<p class="en">States, transitions, conditions, task values, bindings and parameters were decoded directly from the two <code>ST_NPC.uasset</code> files (editor data and compiled data). Task graphs and Blueprint defaults (<code>AcceptableAngle</code> 10, SetSpeed <code>Speed</code> 600, <code>AttackRange</code> 500) were read from the saved assets and the editor's Blueprint tools. Nothing was changed in the project. The behaviour in section 5 follows from the data; it hasn't been watched in PIE.</p>
+<p class="vi">State, transition, condition, giá trị task, binding và parameter được giải mã trực tiếp từ hai file <code>ST_NPC.uasset</code> (dữ liệu editor và dữ liệu đã compile). Graph của các task và giá trị mặc định của Blueprint (<code>AcceptableAngle</code> 10, <code>Speed</code> của SetSpeed 600, <code>AttackRange</code> 500) được đọc từ asset đã lưu và công cụ Blueprint của editor. Không có gì trong dự án bị thay đổi. Diễn biến ở mục 5 được suy ra từ dữ liệu; chưa được quan sát trong PIE.</p>
+
+<footer>
+<span class="en">Generated 2026-11-05 from Combat_PHKH (UE 5.7.1).</span>
+<span class="vi">Tạo ngày 05/11/2026 từ dự án Combat_PHKH (UE 5.7.1).</span>
+</footer>
+</main>
+
+<script>
+  (function () {
+    var KEY = "gasGuideLang";
+    var buttons = document.querySelectorAll("#lang button");
+    function setMode(mode) {
+      document.body.className = "mode-" + mode;
+      buttons.forEach(function (b) { b.classList.toggle("on", b.dataset.mode === mode); });
+      document.documentElement.lang = mode === "en" ? "en" : "vi";
+      try { localStorage.setItem(KEY, mode); } catch (e) {}
+    }
+    buttons.forEach(function (b) { b.addEventListener("click", function () { setMode(b.dataset.mode); }); });
+    var saved = null;
+    try { saved = localStorage.getItem(KEY); } catch (e) {}
+    setMode(saved === "en" || saved === "vi" ? saved : "both");
+  })();
+</script>
+</body>
+</html>
